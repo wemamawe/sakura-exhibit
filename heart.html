@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Please do not approach. — Heart</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #faf9f7;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    overflow: hidden;
+  }
+  .canvas-wrap { width: 480px; height: 620px; }
+  svg#main { width: 100%; height: 100%; overflow: visible; }
+
+  .branch {
+    fill: none; stroke: #2e2a28; stroke-linecap: round; stroke-linejoin: round;
+    stroke-dasharray: var(--len, 1000);
+    stroke-dashoffset: var(--len, 1000);
+  }
+  .bloom   { opacity: 0; transform-origin: center; transform: scale(0); }
+  .fpost   { opacity: 0; }
+  .frope   { opacity: 0; stroke-dashoffset: 700; }
+  .caption { opacity: 0; }
+  .petal   { opacity: 0; }
+
+  @keyframes grow    { to { stroke-dashoffset: 0; } }
+  @keyframes bloomIn {
+    0%  { opacity:0; transform:scale(0); }
+    65% { opacity:1; transform:scale(1.18); }
+    100%{ opacity:1; transform:scale(1); }
+  }
+  @keyframes postUp  {
+    from { opacity:0; transform:translateY(14px); }
+    to   { opacity:1; transform:translateY(0); }
+  }
+  @keyframes ropeIn  {
+    0%  { opacity:0; stroke-dashoffset:700; }
+    20% { opacity:1; }
+    100%{ opacity:1; stroke-dashoffset:0; }
+  }
+  @keyframes fadeIn  { to { opacity:1; } }
+
+  /* petal falls */
+  @keyframes pf1 { 0%{opacity:0;transform:translate(0,0)rotate(0)}   8%{opacity:.8} 100%{opacity:0;transform:translate(-50px,180px)rotate(210deg)} }
+  @keyframes pf2 { 0%{opacity:0;transform:translate(0,0)rotate(30deg)} 8%{opacity:.7} 100%{opacity:0;transform:translate(42px,160px)rotate(-170deg)} }
+  @keyframes pf3 { 0%{opacity:0;transform:translate(0,0)rotate(-20deg)}10%{opacity:.85}100%{opacity:0;transform:translate(-22px,140px)rotate(230deg)} }
+  @keyframes pf4 { 0%{opacity:0;transform:translate(0,0)rotate(55deg)} 9%{opacity:.75}100%{opacity:0;transform:translate(32px,155px)rotate(-185deg)} }
+  @keyframes pf5 { 0%{opacity:0;transform:translate(0,0)rotate(-45deg)}10%{opacity:.8} 100%{opacity:0;transform:translate(-36px,165px)rotate(175deg)} }
+
+  /* ── timing ── */
+  #trunk { --len:270; stroke-width:4;   animation:grow 1.3s cubic-bezier(.4,0,.2,1) .3s  forwards; }
+  #b1    { --len:180; stroke-width:2.4; animation:grow 1s   ease 1.3s forwards; }
+  #b2    { --len:160; stroke-width:2.2; animation:grow .9s  ease 1.5s forwards; }
+  #b3    { --len:155; stroke-width:2;   animation:grow .9s  ease 1.4s forwards; }
+  #b4    { --len:140; stroke-width:1.8; animation:grow .8s  ease 1.6s forwards; }
+  #b5    { --len:130; stroke-width:1.6; animation:grow .8s  ease 1.7s forwards; }
+  #b6    { --len:120; stroke-width:1.5; animation:grow .7s  ease 1.5s forwards; }
+  #t1    { --len:85;  stroke-width:1.2; animation:grow .5s  ease 2.0s forwards; }
+  #t2    { --len:80;  stroke-width:1.1; animation:grow .5s  ease 2.1s forwards; }
+  #t3    { --len:75;  stroke-width:1;   animation:grow .45s ease 2.2s forwards; }
+  #t4    { --len:70;  stroke-width:1;   animation:grow .45s ease 2.1s forwards; }
+  #t5    { --len:65;  stroke-width:.9;  animation:grow .4s  ease 2.3s forwards; }
+  #t6    { --len:60;  stroke-width:.9;  animation:grow .4s  ease 2.2s forwards; }
+  #t7    { --len:55;  stroke-width:.8;  animation:grow .4s  ease 2.4s forwards; }
+
+  .bg1 { animation:bloomIn .4s  cubic-bezier(.34,1.56,.64,1) var(--d,2.5s) forwards; }
+  .bg2 { animation:bloomIn .38s cubic-bezier(.34,1.56,.64,1) var(--d,2.8s) forwards; }
+  .bg3 { animation:bloomIn .35s cubic-bezier(.34,1.56,.64,1) var(--d,3.2s) forwards; }
+
+  .fp1 { animation:postUp .5s ease 3.9s forwards; }
+  .fp2 { animation:postUp .5s ease 4.0s forwards; }
+  .fp3 { animation:postUp .5s ease 4.1s forwards; }
+  .fp4 { animation:postUp .5s ease 4.2s forwards; }
+  #rope1 { animation:ropeIn .9s ease 4.4s forwards; }
+  #rope2 { animation:ropeIn .9s ease 4.6s forwards; }
+
+  .caption { animation:fadeIn 1.4s ease 5.2s forwards; }
+
+  #p1 { animation:pf1 3.2s ease-in 5.8s infinite; }
+  #p2 { animation:pf2 3.8s ease-in 6.5s infinite; }
+  #p3 { animation:pf3 2.9s ease-in 7.2s infinite; }
+  #p4 { animation:pf4 4.1s ease-in 8.0s infinite; }
+  #p5 { animation:pf5 3.5s ease-in 6.9s infinite; }
+</style>
+</head>
+<body>
+<div class="canvas-wrap">
+<svg id="main" viewBox="0 0 480 620" xmlns="http://www.w3.org/2000/svg">
+
+<g id="tree" transform="translate(240,445)">
+
+  <!-- base ring -->
+  <ellipse cx="0" cy="6" rx="28" ry="8" fill="none" stroke="#ccc" stroke-width="1.2"
+    style="opacity:0;animation:fadeIn .6s ease 1.0s forwards"/>
+
+  <!-- trunk: straight, strong center for heart shape -->
+  <path id="trunk" class="branch"
+    d="M0,6 C-2,-20 2,-60 0,-110 C-2,-145 0,-175 0,-205"/>
+
+  <!-- heart shape branches:
+       Left lobe: up-left then curves back right (top of left bump)
+       Right lobe: up-right then curves back left
+       Bottom: two branches going down-left and down-right to form the V point
+  -->
+  <!-- left lobe top -->
+  <path id="b1" class="branch"
+    d="M-2,-175 C-15,-195 -45,-210 -70,-205 C-95,-200 -110,-180 -105,-158"/>
+  <!-- right lobe top -->
+  <path id="b2" class="branch"
+    d="M2,-175 C15,-195 45,-210 70,-205 C95,-200 110,-180 105,-158"/>
+  <!-- left lobe lower -->
+  <path id="b3" class="branch"
+    d="M-8,-140 C-30,-148 -60,-155 -88,-150 C-108,-146 -118,-130 -110,-112"/>
+  <!-- right lobe lower -->
+  <path id="b4" class="branch"
+    d="M8,-140 C30,-148 60,-155 88,-150 C108,-146 118,-130 110,-112"/>
+  <!-- left descending to heart point -->
+  <path id="b5" class="branch"
+    d="M-5,-110 C-20,-98 -35,-82 -25,-65 C-18,-55 -8,-48 0,-38"/>
+  <!-- right descending -->
+  <path id="b6" class="branch"
+    d="M5,-110 C20,-98 35,-82 25,-65 C18,-55 8,-48 0,-38"/>
+
+  <!-- twigs -->
+  <path id="t1" class="branch" d="M-70,-205 C-78,-193 -82,-180 -80,-168"/>
+  <path id="t2" class="branch" d="M 70,-205 C 78,-193  82,-180  80,-168"/>
+  <path id="t3" class="branch" d="M-105,-158 C-112,-145 -108,-133 -106,-120"/>
+  <path id="t4" class="branch" d="M 105,-158 C 112,-145  108,-133  106,-120"/>
+  <path id="t5" class="branch" d="M-88,-150 C-95,-138 -92,-126 -90,-115"/>
+  <path id="t6" class="branch" d="M 88,-150 C 95,-138  92,-126  90,-115"/>
+  <path id="t7" class="branch" d="M0,-205 C-5,-195 -3,-183 0,-172"/>
+
+  <!-- ── Blooms — distributed along heart contour ── -->
+  <!-- top center / dip -->
+  <g class="bloom bg1" style="--d:2.4s" transform="translate(0,-210)">
+    <circle r="6" fill="#e87898" opacity=".88"/><circle r="3" fill="#ffc4d2"/>
+  </g>
+  <!-- left lobe top -->
+  <g class="bloom bg1" style="--d:2.5s" transform="translate(-70,-210)">
+    <circle r="7" fill="#f09ab0" opacity=".9"/><circle r="3.5" fill="#ffd8e5"/>
+  </g>
+  <!-- right lobe top -->
+  <g class="bloom bg1" style="--d:2.5s" transform="translate(70,-210)">
+    <circle r="7" fill="#f09ab0" opacity=".9"/><circle r="3.5" fill="#ffd8e5"/>
+  </g>
+  <!-- left outer -->
+  <g class="bloom bg1" style="--d:2.6s" transform="translate(-112,-168)">
+    <circle r="6" fill="#e07898" opacity=".87"/>
+  </g>
+  <!-- right outer -->
+  <g class="bloom bg1" style="--d:2.6s" transform="translate(112,-168)">
+    <circle r="6" fill="#e07898" opacity=".87"/>
+  </g>
+  <!-- bottom point -->
+  <g class="bloom bg1" style="--d:2.8s" transform="translate(0,-35)">
+    <circle r="5.5" fill="#ec8aaa" opacity=".85"/>
+  </g>
+
+  <!-- batch 2 -->
+  <g class="bloom bg2" style="--d:2.7s" transform="translate(-40,-208)">
+    <circle r="5" fill="#f2a5bb" opacity=".85"/>
+  </g>
+  <g class="bloom bg2" style="--d:2.7s" transform="translate( 40,-208)">
+    <circle r="5" fill="#f2a5bb" opacity=".85"/>
+  </g>
+  <g class="bloom bg2" style="--d:2.9s" transform="translate(-90,-195)">
+    <circle r="5" fill="#ea8aa5"/>
+  </g>
+  <g class="bloom bg2" style="--d:2.9s" transform="translate( 90,-195)">
+    <circle r="5" fill="#ea8aa5"/>
+  </g>
+  <g class="bloom bg2" style="--d:3.0s" transform="translate(-108,-140)">
+    <circle r="4.5" fill="#f0a0b8"/>
+  </g>
+  <g class="bloom bg2" style="--d:3.0s" transform="translate( 108,-140)">
+    <circle r="4.5" fill="#f0a0b8"/>
+  </g>
+  <g class="bloom bg2" style="--d:3.1s" transform="translate(-30,-75)">
+    <circle r="4" fill="#ec8ea8"/>
+  </g>
+  <g class="bloom bg2" style="--d:3.1s" transform="translate( 30,-75)">
+    <circle r="4" fill="#ec8ea8"/>
+  </g>
+  <g class="bloom bg2" style="--d:2.8s" transform="translate(0,-130)">
+    <circle r="5" fill="#f5b0c5"/>
+  </g>
+  <!-- scattered outside -->
+  <g class="bloom bg2" style="--d:3.2s" transform="translate(-125,-155)">
+    <circle r="3.5" fill="#f4b0c4" opacity=".65"/>
+  </g>
+  <g class="bloom bg2" style="--d:3.2s" transform="translate( 125,-155)">
+    <circle r="3.5" fill="#f4b0c4" opacity=".65"/>
+  </g>
+  <g class="bloom bg2" style="--d:3.3s" transform="translate(-78,-215)">
+    <circle r="3" fill="#ec8ca5" opacity=".62"/>
+  </g>
+  <g class="bloom bg2" style="--d:3.3s" transform="translate( 78,-215)">
+    <circle r="3" fill="#ec8ca5" opacity=".62"/>
+  </g>
+
+  <!-- batch 3 small dots -->
+  <g class="bloom bg3" style="--d:3.2s" transform="translate(-55,-202)">
+    <circle r="2.8" fill="#f5b8c8"/>
+  </g>
+  <g class="bloom bg3" style="--d:3.2s" transform="translate( 55,-202)">
+    <circle r="2.8" fill="#f5b8c8"/>
+  </g>
+  <g class="bloom bg3" style="--d:3.4s" transform="translate(-95,-175)">
+    <circle r="2.5" fill="#e890a8"/>
+  </g>
+  <g class="bloom bg3" style="--d:3.4s" transform="translate( 95,-175)">
+    <circle r="2.5" fill="#e890a8"/>
+  </g>
+  <g class="bloom bg3" style="--d:3.5s" transform="translate(-115,-120)">
+    <circle r="2.5" fill="#f0a5b8"/>
+  </g>
+  <g class="bloom bg3" style="--d:3.5s" transform="translate( 115,-120)">
+    <circle r="2.5" fill="#f0a5b8"/>
+  </g>
+  <g class="bloom bg3" style="--d:3.6s" transform="translate(-15,-52)">
+    <circle r="2.5" fill="#f2afc0"/>
+  </g>
+  <g class="bloom bg3" style="--d:3.6s" transform="translate( 15,-52)">
+    <circle r="2.5" fill="#f2afc0"/>
+  </g>
+  <g class="bloom bg3" style="--d:3.3s" transform="translate(0,-170)">
+    <circle r="2.5" fill="#eda8bb"/>
+  </g>
+  <g class="bloom bg3" style="--d:3.7s" transform="translate(-20,-155)">
+    <circle r="2.5" fill="#f0b0c5"/>
+  </g>
+  <g class="bloom bg3" style="--d:3.7s" transform="translate( 20,-155)">
+    <circle r="2.5" fill="#f0b0c5"/>
+  </g>
+  <!-- leaves -->
+  <g class="bloom bg3" style="--d:3.5s" transform="translate(-25,-145) rotate(-30)">
+    <ellipse rx="5" ry="2.2" fill="#98c870" opacity=".78"/>
+  </g>
+  <g class="bloom bg3" style="--d:3.7s" transform="translate( 25,-145) rotate(30)">
+    <ellipse rx="5" ry="2.2" fill="#98c870" opacity=".78"/>
+  </g>
+  <g class="bloom bg3" style="--d:3.8s" transform="translate(-60,-188) rotate(-15)">
+    <ellipse rx="4" ry="2" fill="#a8d878" opacity=".72"/>
+  </g>
+  <g class="bloom bg3" style="--d:3.8s" transform="translate( 60,-188) rotate(15)">
+    <ellipse rx="4" ry="2" fill="#a8d878" opacity=".72"/>
+  </g>
+
+</g><!-- /tree -->
+
+<!-- ── Fence ── -->
+<line class="fpost fp1" x1="110" y1="390" x2="110" y2="432" stroke="#aaa" stroke-width="1.6" stroke-linecap="round"/>
+<circle class="fpost fp1" cx="110" cy="390" r="2.8" fill="#aaa"/>
+<ellipse class="fpost fp1" cx="110" cy="432" rx="4" ry="2" fill="#bbb"/>
+
+<line class="fpost fp2" x1="160" y1="394" x2="160" y2="436" stroke="#aaa" stroke-width="1.6" stroke-linecap="round"/>
+<circle class="fpost fp2" cx="160" cy="394" r="2.8" fill="#aaa"/>
+<ellipse class="fpost fp2" cx="160" cy="436" rx="4" ry="2" fill="#bbb"/>
+
+<line class="fpost fp3" x1="320" y1="394" x2="320" y2="436" stroke="#aaa" stroke-width="1.6" stroke-linecap="round"/>
+<circle class="fpost fp3" cx="320" cy="394" r="2.8" fill="#aaa"/>
+<ellipse class="fpost fp3" cx="320" cy="436" rx="4" ry="2" fill="#bbb"/>
+
+<line class="fpost fp4" x1="370" y1="390" x2="370" y2="432" stroke="#aaa" stroke-width="1.6" stroke-linecap="round"/>
+<circle class="fpost fp4" cx="370" cy="390" r="2.8" fill="#aaa"/>
+<ellipse class="fpost fp4" cx="370" cy="432" rx="4" ry="2" fill="#bbb"/>
+
+<path id="rope1" class="frope"
+  d="M110,402 Q160,418 240,414 Q320,410 370,402"
+  fill="none" stroke="#c03050" stroke-width="1.4" stroke-dasharray="8 4"/>
+<path id="rope2" class="frope"
+  d="M110,416 Q160,432 240,428 Q320,424 370,416"
+  fill="none" stroke="#c03050" stroke-width="1.4" stroke-dasharray="8 4"/>
+
+<!-- caption -->
+<text class="caption" x="240" y="545" text-anchor="middle"
+  font-family="'Palatino Linotype','Book Antiqua',Palatino,serif"
+  font-style="italic" font-size="15" fill="#aaa" letter-spacing="0.5">
+  Please do not approach.
+</text>
+
+<!-- petals -->
+<g id="p1" class="petal" transform="translate(198,278)">
+  <ellipse rx="4.5" ry="2.8" fill="#f0a0b5" opacity=".85" transform="rotate(28)"/>
+</g>
+<g id="p2" class="petal" transform="translate(270,260)">
+  <ellipse rx="4" ry="2.4" fill="#e890a5" opacity=".75" transform="rotate(-18)"/>
+</g>
+<g id="p3" class="petal" transform="translate(235,268)">
+  <ellipse rx="3.5" ry="2.2" fill="#f5b0c5" opacity=".8" transform="rotate(45)"/>
+</g>
+<g id="p4" class="petal" transform="translate(212,254)">
+  <ellipse rx="3.8" ry="2.3" fill="#ec8ea8" opacity=".78" transform="rotate(-35)"/>
+</g>
+<g id="p5" class="petal" transform="translate(258,272)">
+  <ellipse rx="3.2" ry="2" fill="#f2a8be" opacity=".72" transform="rotate(15)"/>
+</g>
+
+</svg>
+</div>
+</body>
+</html>

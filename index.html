@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Please do not approach.</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #faf9f7;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    overflow: hidden;
+  }
+
+  .canvas-wrap {
+    position: relative;
+    width: 480px;
+    height: 620px;
+  }
+
+  svg#main {
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+  }
+
+  .branch {
+    fill: none;
+    stroke: #2e2a28;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-dasharray: var(--len, 1000);
+    stroke-dashoffset: var(--len, 1000);
+  }
+
+  .bloom { opacity: 0; transform-origin: center; transform: scale(0); }
+  .fence-post { opacity: 0; }
+  .fence-rope { opacity: 0; stroke-dashoffset: 600; }
+  .caption { opacity: 0; }
+  .petal { opacity: 0; }
+
+  /* ── Animations ── */
+  @keyframes growBranch { to { stroke-dashoffset: 0; } }
+
+  @keyframes bloomIn {
+    0%   { opacity: 0; transform: scale(0); }
+    65%  { opacity: 1; transform: scale(1.2); }
+    100% { opacity: 1; transform: scale(1); }
+  }
+
+  @keyframes postRise {
+    0%   { opacity: 0; transform: translateY(14px); }
+    100% { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes ropeIn {
+    0%   { opacity: 0; stroke-dashoffset: 600; }
+    20%  { opacity: 1; }
+    100% { opacity: 1; stroke-dashoffset: 0; }
+  }
+
+  @keyframes fadeIn { to { opacity: 1; } }
+
+  /* petal fall variants */
+  @keyframes pf1 {
+    0%   { opacity:0; transform:translate(0,0) rotate(0deg); }
+    8%   { opacity:.8; }
+    100% { opacity:0; transform:translate(-45px,170px) rotate(200deg); }
+  }
+  @keyframes pf2 {
+    0%   { opacity:0; transform:translate(0,0) rotate(30deg); }
+    8%   { opacity:.7; }
+    100% { opacity:0; transform:translate(38px,150px) rotate(-160deg); }
+  }
+  @keyframes pf3 {
+    0%   { opacity:0; transform:translate(0,0) rotate(-15deg); }
+    12%  { opacity:.85; }
+    100% { opacity:0; transform:translate(-18px,130px) rotate(220deg); }
+  }
+  @keyframes pf4 {
+    0%   { opacity:0; transform:translate(0,0) rotate(50deg); }
+    10%  { opacity:.75; }
+    100% { opacity:0; transform:translate(28px,145px) rotate(-180deg); }
+  }
+  @keyframes pf5 {
+    0%   { opacity:0; transform:translate(0,0) rotate(-40deg); }
+    10%  { opacity:.8; }
+    100% { opacity:0; transform:translate(-30px,155px) rotate(170deg); }
+  }
+
+  /* ── Timing ── */
+  /* trunk */
+  #trunk { --len:280; stroke-width:4;
+    animation: growBranch 1.3s cubic-bezier(.4,0,.2,1) .3s forwards; }
+  /* major branches */
+  #b1 { --len:200; stroke-width:2.4;
+    animation: growBranch 1s ease 1.3s forwards; }
+  #b2 { --len:190; stroke-width:2.2;
+    animation: growBranch .9s ease 1.5s forwards; }
+  #b3 { --len:170; stroke-width:2;
+    animation: growBranch .9s ease 1.4s forwards; }
+  #b4 { --len:155; stroke-width:1.8;
+    animation: growBranch .8s ease 1.7s forwards; }
+  #b5 { --len:130; stroke-width:1.6;
+    animation: growBranch .7s ease 1.6s forwards; }
+  /* minor twigs */
+  #t1 { --len:90; stroke-width:1.2;
+    animation: growBranch .5s ease 2.0s forwards; }
+  #t2 { --len:85; stroke-width:1.1;
+    animation: growBranch .5s ease 2.1s forwards; }
+  #t3 { --len:80; stroke-width:1;
+    animation: growBranch .5s ease 2.2s forwards; }
+  #t4 { --len:75; stroke-width:1;
+    animation: growBranch .45s ease 2.1s forwards; }
+  #t5 { --len:70; stroke-width:.9;
+    animation: growBranch .45s ease 2.3s forwards; }
+  #t6 { --len:65; stroke-width:.9;
+    animation: growBranch .4s ease 2.4s forwards; }
+  #t7 { --len:60; stroke-width:.8;
+    animation: growBranch .4s ease 2.3s forwards; }
+  #t8 { --len:55; stroke-width:.8;
+    animation: growBranch .4s ease 2.5s forwards; }
+
+  /* blooms */
+  .bg1 { animation: bloomIn .4s cubic-bezier(.34,1.56,.64,1) var(--d,2.5s) forwards; }
+  .bg2 { animation: bloomIn .38s cubic-bezier(.34,1.56,.64,1) var(--d,2.8s) forwards; }
+  .bg3 { animation: bloomIn .35s cubic-bezier(.34,1.56,.64,1) var(--d,3.2s) forwards; }
+
+  /* fence */
+  .fp1 { animation: postRise .5s ease 3.9s forwards; }
+  .fp2 { animation: postRise .5s ease 4.0s forwards; }
+  .fp3 { animation: postRise .5s ease 4.1s forwards; }
+  .fp4 { animation: postRise .5s ease 4.2s forwards; }
+  #rope1 { animation: ropeIn .9s ease 4.4s forwards; }
+  #rope2 { animation: ropeIn .9s ease 4.6s forwards; }
+
+  /* caption */
+  .caption { animation: fadeIn 1.4s ease 5.2s forwards; }
+
+  /* petals */
+  #p1 { animation: pf1 3.2s ease-in 5.8s infinite; }
+  #p2 { animation: pf2 3.8s ease-in 6.5s infinite; }
+  #p3 { animation: pf3 2.9s ease-in 7.2s infinite; }
+  #p4 { animation: pf4 4.1s ease-in 8.0s infinite; }
+  #p5 { animation: pf5 3.5s ease-in 6.9s infinite; }
+</style>
+</head>
+<body>
+<div class="canvas-wrap">
+<svg id="main" viewBox="0 0 480 620" xmlns="http://www.w3.org/2000/svg">
+
+  <g id="tree" transform="translate(240,440)">
+
+    <!-- base ring -->
+    <ellipse cx="0" cy="8" rx="30" ry="9" fill="none" stroke="#ccc" stroke-width="1.2"
+      style="opacity:0;animation:fadeIn .6s ease 1.0s forwards"/>
+
+    <!-- trunk -->
+    <path id="trunk" class="branch"
+      d="M0,8 C-4,-18 3,-60 -4,-110 C-9,-148 2,-175 0,-215"/>
+
+    <!-- major branches — fan shape -->
+    <path id="b1" class="branch"
+      d="M-4,-108 C-22,-118 -55,-112 -90,-120 C-112,-126 -130,-135 -148,-148"/>
+    <path id="b2" class="branch"
+      d="M-2,-148 C12,-158 38,-155 72,-160 C96,-164 118,-167 138,-172"/>
+    <path id="b3" class="branch"
+      d="M-4,-170 C-18,-180 -44,-185 -74,-192 C-96,-198 -118,-200 -136,-205"/>
+    <path id="b4" class="branch"
+      d="M0,-190 C10,-200 28,-208 52,-214 C70,-218 90,-220 108,-222"/>
+    <path id="b5" class="branch"
+      d="M-2,-215 C-12,-224 -28,-228 -48,-232 C-62,-235 -78,-236 -92,-235"/>
+
+    <!-- minor twigs -->
+    <path id="t1" class="branch" d="M-90,-120 C-95,-105 -98,-92 -100,-78"/>
+    <path id="t2" class="branch" d="M-148,-148 C-150,-133 -145,-120 -143,-108"/>
+    <path id="t3" class="branch" d="M108,-222 C112,-208 110,-195 114,-183"/>
+    <path id="t4" class="branch" d="M72,-160 C78,-145 76,-133 80,-120"/>
+    <path id="t5" class="branch" d="M-74,-192 C-80,-178 -75,-166 -77,-154"/>
+    <path id="t6" class="branch" d="M-136,-205 C-140,-191 -135,-179 -138,-168"/>
+    <path id="t7" class="branch" d="M-48,-232 C-52,-218 -48,-206 -50,-195"/>
+    <path id="t8" class="branch" d="M-92,-235 C-96,-221 -92,-210 -94,-200"/>
+
+    <!-- ── Blooms ── -->
+    <!-- batch 1 — big anchor blossoms -->
+    <g class="bloom bg1" style="--d:2.4s" transform="translate(-95,-125)">
+      <circle r="6.5" fill="#f09ab0" opacity=".9"/>
+      <circle r="3" fill="#ffd8e5"/>
+    </g>
+    <g class="bloom bg1" style="--d:2.5s" transform="translate(-142,-152)">
+      <circle r="7" fill="#e07a98" opacity=".88"/>
+      <circle r="3.5" fill="#ffc0d0"/>
+    </g>
+    <g class="bloom bg1" style="--d:2.6s" transform="translate(120,-175)">
+      <circle r="6" fill="#f0a5b8" opacity=".9"/>
+      <circle r="3" fill="#ffe4ec"/>
+    </g>
+    <g class="bloom bg1" style="--d:2.7s" transform="translate(-2,-220)">
+      <circle r="6" fill="#e87898" opacity=".88"/>
+      <circle r="3" fill="#ffc4d2"/>
+    </g>
+    <g class="bloom bg1" style="--d:2.65s" transform="translate(50,-218)">
+      <circle r="5.5" fill="#f09ab2" opacity=".85"/>
+    </g>
+    <g class="bloom bg1" style="--d:2.75s" transform="translate(-90,-235)">
+      <circle r="5" fill="#e882a0" opacity=".87"/>
+    </g>
+
+    <!-- batch 2 — medium -->
+    <g class="bloom bg2" style="--d:2.8s" transform="translate(-72,-196)">
+      <circle r="5" fill="#f2a5bb" opacity=".85"/>
+    </g>
+    <g class="bloom bg2" style="--d:2.9s" transform="translate(38,-212)">
+      <circle r="5.5" fill="#ec8ca8" opacity=".88"/>
+    </g>
+    <g class="bloom bg2" style="--d:3.0s" transform="translate(-55,-152)">
+      <circle r="4.5" fill="#f5b0c5"/>
+    </g>
+    <g class="bloom bg2" style="--d:2.9s" transform="translate(80,-165)">
+      <circle r="5" fill="#e885a2"/>
+    </g>
+    <g class="bloom bg2" style="--d:3.1s" transform="translate(-115,-200)">
+      <circle r="4.5" fill="#f0a2b8"/>
+    </g>
+    <g class="bloom bg2" style="--d:3.0s" transform="translate(28,-162)">
+      <circle r="4" fill="#f2b2c5"/>
+    </g>
+    <g class="bloom bg2" style="--d:3.2s" transform="translate(-130,-162)">
+      <circle r="4" fill="#ec8ea8"/>
+    </g>
+    <g class="bloom bg2" style="--d:3.1s" transform="translate(95,-185)">
+      <circle r="4" fill="#f0a0b5"/>
+    </g>
+    <!-- scattered outside canopy (飘散感) -->
+    <g class="bloom bg2" style="--d:3.2s" transform="translate(-160,-158)">
+      <circle r="3.5" fill="#f4b0c4" opacity=".7"/>
+    </g>
+    <g class="bloom bg2" style="--d:3.3s" transform="translate(148,-178)">
+      <circle r="3" fill="#ec8ca5" opacity=".65"/>
+    </g>
+    <g class="bloom bg2" style="--d:3.1s" transform="translate(-102,-242)">
+      <circle r="3.5" fill="#f0a2b2" opacity=".7"/>
+    </g>
+
+    <!-- batch 3 — small dots -->
+    <g class="bloom bg3" style="--d:3.2s" transform="translate(-95,-82)">
+      <circle r="3" fill="#f5b8c8"/>
+    </g>
+    <g class="bloom bg3" style="--d:3.3s" transform="translate(-120,-108)">
+      <circle r="3" fill="#e890a8"/>
+    </g>
+    <g class="bloom bg3" style="--d:3.4s" transform="translate(100,-178)">
+      <circle r="3" fill="#f0a5b8"/>
+    </g>
+    <g class="bloom bg3" style="--d:3.5s" transform="translate(65,-118)">
+      <circle r="3" fill="#f2afc0"/>
+    </g>
+    <g class="bloom bg3" style="--d:3.3s" transform="translate(-60,-158)">
+      <circle r="2.5" fill="#eda8bb"/>
+    </g>
+    <g class="bloom bg3" style="--d:3.6s" transform="translate(18,-172)">
+      <circle r="2.5" fill="#f0b0c5"/>
+    </g>
+    <g class="bloom bg3" style="--d:3.7s" transform="translate(-32,-200)">
+      <circle r="3" fill="#e89ab0"/>
+    </g>
+    <g class="bloom bg3" style="--d:3.4s" transform="translate(88,-215)">
+      <circle r="2.5" fill="#f5b5c8"/>
+    </g>
+    <g class="bloom bg3" style="--d:3.5s" transform="translate(-48,-218)">
+      <circle r="2.5" fill="#ec9ab2"/>
+    </g>
+    <g class="bloom bg3" style="--d:3.8s" transform="translate(-78,-228)">
+      <circle r="2" fill="#f0aac0"/>
+    </g>
+    <!-- green leaves -->
+    <g class="bloom bg3" style="--d:3.5s" transform="translate(-22,-165) rotate(-30)">
+      <ellipse rx="5.5" ry="2.5" fill="#98c870" opacity=".8"/>
+    </g>
+    <g class="bloom bg3" style="--d:3.8s" transform="translate(52,-148) rotate(22)">
+      <ellipse rx="5" ry="2.2" fill="#a8d878" opacity=".75"/>
+    </g>
+    <g class="bloom bg3" style="--d:3.6s" transform="translate(-78,-175) rotate(-18)">
+      <ellipse rx="4.5" ry="2" fill="#a0d270" opacity=".72"/>
+    </g>
+    <g class="bloom bg3" style="--d:3.9s" transform="translate(30,-210) rotate(12)">
+      <ellipse rx="4" ry="2" fill="#acd880" opacity=".7"/>
+    </g>
+
+  </g><!-- /tree -->
+
+  <!-- ── Fence ── -->
+  <!-- posts -->
+  <line class="fence-post fp1" x1="108" y1="388" x2="108" y2="430"
+    stroke="#aaa" stroke-width="1.6" stroke-linecap="round"/>
+  <circle class="fence-post fp1" cx="108" cy="388" r="2.8" fill="#aaa"/>
+  <ellipse class="fence-post fp1" cx="108" cy="430" rx="4" ry="2" fill="#bbb"/>
+
+  <line class="fence-post fp2" x1="158" y1="392" x2="158" y2="434"
+    stroke="#aaa" stroke-width="1.6" stroke-linecap="round"/>
+  <circle class="fence-post fp2" cx="158" cy="392" r="2.8" fill="#aaa"/>
+  <ellipse class="fence-post fp2" cx="158" cy="434" rx="4" ry="2" fill="#bbb"/>
+
+  <line class="fence-post fp3" x1="322" y1="392" x2="322" y2="434"
+    stroke="#aaa" stroke-width="1.6" stroke-linecap="round"/>
+  <circle class="fence-post fp3" cx="322" cy="392" r="2.8" fill="#aaa"/>
+  <ellipse class="fence-post fp3" cx="322" cy="434" rx="4" ry="2" fill="#bbb"/>
+
+  <line class="fence-post fp4" x1="372" y1="388" x2="372" y2="430"
+    stroke="#aaa" stroke-width="1.6" stroke-linecap="round"/>
+  <circle class="fence-post fp4" cx="372" cy="388" r="2.8" fill="#aaa"/>
+  <ellipse class="fence-post fp4" cx="372" cy="430" rx="4" ry="2" fill="#bbb"/>
+
+  <!-- ropes — red/white dashed (two rows) -->
+  <path id="rope1" class="fence-rope"
+    d="M108,400 Q158,416 240,412 Q322,408 372,400"
+    fill="none" stroke="#c03050" stroke-width="1.4"
+    stroke-dasharray="8 4"/>
+  <path id="rope2" class="fence-rope"
+    d="M108,414 Q158,430 240,426 Q322,422 372,414"
+    fill="none" stroke="#c03050" stroke-width="1.4"
+    stroke-dasharray="8 4"/>
+
+  <!-- ── Caption ── -->
+  <text class="caption" x="240" y="540" text-anchor="middle"
+    font-family="'Palatino Linotype','Book Antiqua',Palatino,serif"
+    font-style="italic" font-size="15" fill="#aaa" letter-spacing="0.5">
+    Please do not approach.
+  </text>
+
+  <!-- ── Falling petals ── -->
+  <g id="p1" class="petal" transform="translate(200,280)">
+    <ellipse rx="4.5" ry="2.8" fill="#f0a0b5" opacity=".85" transform="rotate(28)"/>
+  </g>
+  <g id="p2" class="petal" transform="translate(268,262)">
+    <ellipse rx="4" ry="2.4" fill="#e890a5" opacity=".75" transform="rotate(-18)"/>
+  </g>
+  <g id="p3" class="petal" transform="translate(235,270)">
+    <ellipse rx="3.5" ry="2.2" fill="#f5b0c5" opacity=".8" transform="rotate(45)"/>
+  </g>
+  <g id="p4" class="petal" transform="translate(215,255)">
+    <ellipse rx="3.8" ry="2.3" fill="#ec8ea8" opacity=".78" transform="rotate(-35)"/>
+  </g>
+  <g id="p5" class="petal" transform="translate(255,275)">
+    <ellipse rx="3.2" ry="2" fill="#f2a8be" opacity=".72" transform="rotate(15)"/>
+  </g>
+
+</svg>
+</div>
+</body>
+</html>

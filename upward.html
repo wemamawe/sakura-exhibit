@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>等枝桠成繁华</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    background: #7bbfd8;
+    display: flex; align-items: center; justify-content: center;
+    min-height: 100vh; overflow: hidden;
+  }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const W = 520, H = 640;
+canvas.width = W;
+canvas.height = H;
+
+// ── Branch node ──
+const branches = [];
+let totalB = 0;
+
+// upward-spreading tree viewed from below
+// origin near top-left, branches spread downward into frame
+function buildTree(x, y, len, angle, depth, strokeW) {
+  if (depth > 10 || len < 4) return;
+  const x2 = x + Math.cos(angle) * len;
+  const y2 = y + Math.sin(angle) * len;
+  branches.push({ x1:x, y1:y, x2, y2, depth, strokeW, id: totalB++ });
+  const newLen = len * (0.68 + Math.random()*0.1);
+  const spread = 0.38 + Math.random()*0.1;
+  buildTree(x2, y2, newLen, angle - spread*(0.8+Math.random()*0.4), depth+1, strokeW*0.75);
+  buildTree(x2, y2, newLen, angle + spread*(0.7+Math.random()*0.4), depth+1, strokeW*0.75);
+  if (depth < 4 && Math.random() < 0.3) {
+    buildTree(x2, y2, newLen*0.7, angle + (Math.random()-0.5)*0.6, depth+2, strokeW*0.6);
+  }
+}
+
+// Two main trunks from top, angled downward/outward (simulating upward view)
+buildTree(W*0.18, -10, 130, Math.PI/2 + 0.3,  0, 5);
+buildTree(W*0.55, -10, 120, Math.PI/2 - 0.1,  0, 5);
+buildTree(W*0.85, -10,  90, Math.PI/2 - 0.35, 0, 4);
+
+// ── Flowers ──
+const flowers = [];
+for (const b of branches) {
+  if (b.depth >= 5 && Math.random() < 0.6) {
+    for (let k=0; k<2+Math.floor(Math.random()*3); k++) {
+      const t = Math.random();
+      flowers.push({
+        x: b.x1 + (b.x2-b.x1)*t + (Math.random()-0.5)*8,
+        y: b.y1 + (b.y2-b.y1)*t + (Math.random()-0.5)*8,
+        r: 3.5 + Math.random()*3.5,
+        hue: 340 + Math.floor(Math.random()*15),
+        sat: 60 + Math.floor(Math.random()*20),
+        lid: b.id,
+        petals: 4 + Math.floor(Math.random()*2),
+      });
+    }
+  }
+  if (b.depth >= 8 && Math.random() < 0.4) {
+    flowers.push({
+      x: b.x2, y: b.y2,
+      r: 2.5 + Math.random()*2,
+      hue: 345, sat: 55, lid: b.id, petals: 5,
+    });
+  }
+}
+
+// ── Leaves ──
+const leaves = [];
+for (const b of branches) {
+  if (b.depth >= 4 && Math.random() < 0.25) {
+    leaves.push({
+      x: b.x2, y: b.y2,
+      size: 4 + Math.random()*5,
+      angle: Math.random()*Math.PI*2,
+      lid: b.id,
+    });
+  }
+}
+
+// ── Falling petals ──
+const petals = Array.from({length:22}, () => ({
+  x: Math.random()*W,
+  y: Math.random()*H*0.7,
+  vx: (Math.random()-0.5)*0.6,
+  vy: 0.4 + Math.random()*0.7,
+  rot: Math.random()*Math.PI*2,
+  vrot: (Math.random()-0.5)*0.04,
+  rx: 3 + Math.random()*2.5,
+  ry: 1.5 + Math.random(),
+  alpha: 0.4 + Math.random()*0.4,
+  delay: Math.random()*200,
+}));
+
+// ── Draw helpers ──
+function drawFlower(f, alpha) {
+  ctx.save();
+  ctx.translate(f.x, f.y);
+  const petCount = f.petals;
+  for (let i=0; i<petCount; i++) {
+    const a = (i/petCount)*Math.PI*2;
+    ctx.beginPath();
+    ctx.ellipse(
+      Math.cos(a)*f.r*1.1, Math.sin(a)*f.r*1.1,
+      f.r*0.8, f.r*0.45, a, 0, Math.PI*2
+    );
+    ctx.fillStyle = `hsla(${f.hue},${f.sat}%,88%,${0.9*alpha})`;
+    ctx.fill();
+  }
+  ctx.beginPath();
+  ctx.arc(0, 0, f.r*0.4, 0, Math.PI*2);
+  ctx.fillStyle = `hsla(${f.hue+5},85%,65%,${0.95*alpha})`;
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawLeaf(l, alpha) {
+  ctx.save();
+  ctx.translate(l.x, l.y);
+  ctx.rotate(l.angle);
+  ctx.beginPath();
+  ctx.ellipse(0, 0, l.size, l.size*0.45, 0, 0, Math.PI*2);
+  ctx.fillStyle = `rgba(120,190,80,${0.75*alpha})`;
+  ctx.fill();
+  ctx.restore();
+}
+
+// ── Sky glow at bottom ──
+function drawSky() {
+  const grad = ctx.createLinearGradient(0, 0, 0, H);
+  grad.addColorStop(0,   '#5a9fc0');
+  grad.addColorStop(0.45,'#82c2dc');
+  grad.addColorStop(0.72,'#a8d8ee');
+  grad.addColorStop(1,   '#c4e8f6');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, W, H);
+}
+
+// ── Text ──
+function drawText(alpha) {
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.font = 'bold 24px "PingFang SC","Microsoft YaHei",sans-serif';
+  ctx.textAlign = 'right';
+  // white outline
+  ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+  ctx.lineWidth = 4;
+  ctx.strokeText('等枝桠成繁华', W - 28, 220);
+  ctx.fillStyle = 'rgba(60,40,40,0.82)';
+  ctx.fillText('等枝桠成繁华', W - 28, 220);
+  ctx.restore();
+}
+
+// ── Animation ──
+let frame = 0;
+const GROW_FRAMES = 180;
+
+function ease(t) { return t<.5 ? 2*t*t : -1+(4-2*t)*t; }
+
+function animate() {
+  requestAnimationFrame(animate);
+  frame++;
+
+  drawSky();
+
+  const progress = Math.min(1, frame / GROW_FRAMES);
+  const revealUpTo = Math.floor(ease(progress) * totalB);
+
+  // branches
+  for (const b of branches) {
+    if (b.id > revealUpTo) continue;
+    const a = Math.min(1, (revealUpTo - b.id) / Math.max(1, totalB * 0.04));
+    ctx.beginPath();
+    ctx.moveTo(b.x1, b.y1);
+    ctx.lineTo(b.x2, b.y2);
+    ctx.strokeStyle = `rgba(35,28,22,${a})`;
+    ctx.lineWidth = Math.max(0.5, b.strokeW);
+    ctx.lineCap = 'round';
+    ctx.stroke();
+  }
+
+  // leaves
+  for (const l of leaves) {
+    if (l.lid > revealUpTo - 3) continue;
+    const a = Math.min(1, (revealUpTo - l.lid - 3) / Math.max(1, totalB*0.05));
+    drawLeaf(l, a);
+  }
+
+  // flowers
+  for (const f of flowers) {
+    if (f.lid > revealUpTo - 5) continue;
+    const a = Math.min(1, (revealUpTo - f.lid - 5) / Math.max(1, totalB*0.05));
+    drawFlower(f, a);
+  }
+
+  // falling petals
+  if (frame > 120) {
+    for (const p of petals) {
+      if (frame < p.delay + 120) continue;
+      p.x += p.vx + Math.sin(frame*0.018 + p.delay)*0.5;
+      p.y += p.vy;
+      p.rot += p.vrot;
+      if (p.y > H + 15) { p.y = -10; p.x = Math.random()*W; }
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.rot);
+      ctx.beginPath();
+      ctx.ellipse(0, 0, p.rx, p.ry, 0, 0, Math.PI*2);
+      ctx.fillStyle = `hsla(345,72%,82%,${p.alpha})`;
+      ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  // text fades in after branches mostly done
+  if (frame > 150) {
+    const ta = Math.min(1, (frame-150)/40);
+    drawText(ta);
+  }
+}
+
+animate();
+</script>
+</body>
+</html>
