@@ -333,8 +333,8 @@ function makeParticlesFromBranches(branches, tex, size, perBranch){
       const y = b.py+(b.ey-b.py)*t;
       const z = b.pz+(b.ez-b.pz)*t;
       // 微小随机扰动避免重叠
-      const jitter = size*0.25;
-      const angle = (k*2.39996)*Math.PI*2; // 黄金角展开
+      const jitter = size * (b.depth>=5 ? 0.55 : b.depth>=3 ? 0.35 : 0.20);
+      const angle = (k*2.39996)*Math.PI*2;
       positions.push({
         x: x + Math.cos(angle)*jitter,
         y: y + (Math.random()-0.5)*jitter*0.5,
@@ -356,10 +356,10 @@ function makeParticlesFromBranches(branches, tex, size, perBranch){
   return new THREE.Points(geo,mat);
 }
 
-// 每条枝8个粒子（范围内约 branches.length*8 个粒子）
-const budPts    = makeParticlesFromBranches(tips,    budTex,    0.30, 6);
-const sakuraPts = makeParticlesFromBranches(branches, sakuraTex, 0.52, 8);
-const leafPts   = makeParticlesFromBranches(branches, leafTex,   0.42, 7);
+// 每条枝8个粒子，根据枝条深度决定每条数量
+const budPts    = makeParticlesFromBranches(branches, budTex,    0.28, 5);
+const sakuraPts = makeParticlesFromBranches(branches, sakuraTex, 0.52, 9);
+const leafPts   = makeParticlesFromBranches(branches, leafTex,   0.42, 8);
 scene.add(budPts); scene.add(sakuraPts); scene.add(leafPts);
 budPts.visible=false; sakuraPts.visible=false; leafPts.visible=false;
 
