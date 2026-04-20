@@ -62,8 +62,8 @@ scene.background = new THREE.Color(0x87ceeb);
 scene.fog = new THREE.Fog(0xc8e8f8, 40, 120);
 
 const camera = new THREE.PerspectiveCamera(48, innerWidth/innerHeight, 0.1, 500);
-camera.position.set(0, 6, 22);
-camera.lookAt(0, 6, 0);
+camera.position.set(0, 4, 18);
+camera.lookAt(0, 3.5, 0);
 
 window.addEventListener('resize',()=>{
   camera.aspect=innerWidth/innerHeight;
@@ -144,33 +144,33 @@ ground.rotation.x=-Math.PI/2; ground.receiveShadow=true;
 scene.add(ground);
 
 // ── Build peach tree branches ──
-// Peach tree: shorter trunk, spreads wide at ~1/3 height, dense mid canopy
+// Peach tree: short trunk, very wide spreading canopy
 const branches=[];
 function buildBranch(px,py,pz,dx,dy,dz,len,rad,depth){
-  if(depth>8||len<0.08) return;
+  if(depth>8||len<0.1) return;
   const ex=px+dx*len, ey=py+dy*len, ez=pz+dz*len;
   branches.push({px,py,pz,ex,ey,ez,rad,depth,id:branches.length});
   if(depth>=8) return;
-  // Peach spreads wide early, more horizontal than vertical
-  const spreadBase = depth<2 ? 0.52 : 0.38;
-  const spread = spreadBase + (Math.random()-.5)*0.06;
-  const lr = len*(0.65+depth*0.004);
+  // wide spread: peach crown is broad, low, round
+  const spreadBase = depth<2 ? 0.68 : depth<4 ? 0.50 : 0.38;
+  const spread = spreadBase + (Math.random()-.5)*0.05;
+  const lr = len*(0.62+depth*0.005);
   const up=new THREE.Vector3(0,1,0);
   const dir=new THREE.Vector3(dx,dy,dz).normalize();
   let ax=new THREE.Vector3().crossVectors(dir,up).normalize();
   if(ax.lengthSq()<0.01) ax.set(1,0,0);
-  // twist around Y for natural spread
-  const twist=depth<3 ? (depth%2===0?0.3:-0.3) : (Math.random()-.5)*0.25;
+  const twist=depth<4?(depth%2===0?0.45:-0.45):(Math.random()-.5)*0.3;
   const lDir=dir.clone().applyAxisAngle(ax,spread).applyAxisAngle(up,twist);
   buildBranch(ex,ey,ez,lDir.x,lDir.y,lDir.z,lr,rad*0.72,depth+1);
-  const rDir=dir.clone().applyAxisAngle(ax,-spread*0.9).applyAxisAngle(up,-twist*0.8);
-  buildBranch(ex,ey,ez,rDir.x,rDir.y,rDir.z,lr*0.92,rad*0.70,depth+1);
-  if(depth<3&&Math.random()<0.3){
-    const mDir=dir.clone().applyAxisAngle(up,(Math.random()-.5)*0.8);
-    buildBranch(ex,ey,ez,mDir.x,mDir.y,mDir.z,lr*0.6,rad*0.55,depth+2);
+  const rDir=dir.clone().applyAxisAngle(ax,-spread*0.92).applyAxisAngle(up,-twist*0.85);
+  buildBranch(ex,ey,ez,rDir.x,rDir.y,rDir.z,lr*0.90,rad*0.70,depth+1);
+  if(depth<3&&Math.random()<0.4){
+    const mDir=dir.clone().applyAxisAngle(up,(Math.random()-.5)*1.0)
+                          .applyAxisAngle(ax,(Math.random()-.5)*0.4);
+    buildBranch(ex,ey,ez,mDir.x,mDir.y,mDir.z,lr*0.55,rad*0.52,depth+2);
   }
 }
-buildBranch(0,0,0, 0,1,0, 3.8, 0.16, 0);
+buildBranch(0,0,0, 0,1,0, 2.6, 0.22, 0);  // shorter trunk
 const TOTAL=branches.length;
 const tips=branches.filter(b=>b.depth>=5);
 
@@ -323,13 +323,13 @@ function makeParticles(count,tex,size,positions,sizeAtt=false){
   return new THREE.Points(geo,mat);
 }
 
-const flowerPts  = makeParticles(500, peachFlowerTex, 0.38, allTipPos);
-const greenPts   = makeParticles(450, greenLeafTex,   0.32, allTipPos);
-const peachPts   = makeParticles(130, peachTex,       0.30, tipPositions);
+const flowerPts  = makeParticles(1400, peachFlowerTex, 0.55, allTipPos);
+const greenPts   = makeParticles(1200, greenLeafTex,   0.45, allTipPos);
+const peachPts   = makeParticles(220,  peachTex,       0.60, tipPositions);
 scene.add(flowerPts); scene.add(greenPts); scene.add(peachPts);
 
 // ── Falling leaves ──
-const FALL=350;
+const FALL=500;
 const fallGeo=new THREE.BufferGeometry();
 const fallPos=new Float32Array(FALL*3);
 const fallVel=[];
@@ -343,7 +343,7 @@ function resetLeaf(i){
 for(let i=0;i<FALL;i++) resetLeaf(i);
 fallGeo.setAttribute('position',new THREE.BufferAttribute(fallPos,3));
 const fallMat=new THREE.PointsMaterial({
-  map:yellowLeafTex, size:0.38, transparent:true,
+  map:yellowLeafTex, size:0.52, transparent:true,
   opacity:0, depthWrite:false, alphaTest:0.05,
 });
 const fallingLeaves=new THREE.Points(fallGeo,fallMat);
@@ -428,9 +428,9 @@ renderer.setAnimationLoop(()=>{
   // Particles
   greenPts.material.opacity  =easeOut(state.greenLeaf)*0.88;
   flowerPts.material.opacity =easeOut(state.flower)*0.92;
-  flowerPts.material.size    =0.36+Math.sin(elapsed*1.2)*0.025; // gentle sway
+  flowerPts.material.size    =0.52+Math.sin(elapsed*1.2)*0.04;
   peachPts.material.opacity  =easeOut(state.fruit)*0.95;
-  peachPts.material.size     =0.28+Math.sin(elapsed*0.9)*0.015;
+  peachPts.material.size     =0.58+Math.sin(elapsed*0.9)*0.025;
 
   // Falling leaves
   fallMat.opacity=easeOut(state.fall)*0.90;
@@ -447,10 +447,10 @@ renderer.setAnimationLoop(()=>{
   }
 
   // Camera gentle orbit
-  camera.position.x=Math.sin(elapsed*0.09)*2.2;
-  camera.position.z=22+Math.sin(elapsed*0.06)*1.8;
-  camera.position.y=6+Math.sin(elapsed*0.07)*0.6;
-  camera.lookAt(0,6,0);
+  camera.position.x=Math.sin(elapsed*0.09)*2.0;
+  camera.position.z=18+Math.sin(elapsed*0.06)*1.5;
+  camera.position.y=4+Math.sin(elapsed*0.07)*0.5;
+  camera.lookAt(0,3.5,0);
 
   // Clouds drift
   for(const c of clouds){
