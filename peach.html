@@ -358,6 +358,10 @@ const fallGeo=new THREE.BufferGeometry();
 const fallPos=new Float32Array(FALL*3);
 const fallVel=[];
 // Leaves start FROM tip positions, not random sky positions
+// 每片叶子独立状态记录
+const fallState = new Array(FALL).fill('falling'); // 'falling' | 'resting'
+let restCount = 0; // 已落地的叶子数
+
 function resetLeaf(i){
   // pick a random tip as starting point
   const tip = allTipPos[Math.floor(Math.random()*allTipPos.length)];
@@ -366,6 +370,7 @@ function resetLeaf(i){
   fallPos[i*3+2]= tip.z + (Math.random()-.5)*0.8;
   fallVel[i]={vx:(Math.random()-.5)*0.04, vy:-(0.025+Math.random()*0.035),
               vz:(Math.random()-.5)*0.03, phase:Math.random()*Math.PI*2};
+  fallState[i]='falling';
 }
 for(let i=0;i<FALL;i++) resetLeaf(i);
 fallGeo.setAttribute('position',new THREE.BufferAttribute(fallPos,3));
@@ -414,6 +419,12 @@ window.goStage=s=>{
   sun.intensity=sunI[s];
   const ambC=[0xfff0e8,0xf0ffe0,0xffe8f8,0xfff0d0,0xf0e8c0];
   ambient.color.setHex(ambC[s]);
+  // 重新进入落叶阶段时，重置所有叶子状态
+  if(s===4){
+    restCount=0;
+    for(let i=0;i<FALL;i++) resetLeaf(i);
+    fallGeo.getAttribute('position').needsUpdate=true;
+  }
 };
 
 // ── Helpers ──
@@ -513,12 +524,30 @@ renderer.setAnimationLoop(()=>{
   fallMat.opacity=easeOut(state.fall)*0.90;
   if(state.fall>0.05){
     const pa=fallGeo.getAttribute('position');
+    let anyMoving=false;
     for(let i=0;i<FALL;i++){
+      if(fallState[i]==='resting') continue; // 已落地，不再移动
+      anyMoving=true;
       const v=fallVel[i];
       pa.array[i*3]  +=v.vx+Math.sin(elapsed*0.6+v.phase)*0.018;
       pa.array[i*3+1]+=v.vy*state.fall;
       pa.array[i*3+2]+=v.vz;
-      if(pa.array[i*3+1]<-0.5) resetLeaf(i);
+      // 检测山坡地面高度（简化：用 sin/cos 近似山坡表面）
+      const lx=pa.array[i*3], lz=pa.array[i*3+2];
+      const groundH = (Math.sin(lx*0.12)*1.2+Math.cos(lz*0.09)*0.9
+                      +Math.sin(lx*0.25+lz*0.18)*0.5+Math.cos(lx*0.08-lz*0.15)*0.8)
+                      * (1-Math.max(0,1-Math.sqrt(lx*lx+lz*lz)/8)); // center flatten
+      if(pa.array[i*3+1] <= groundH+0.05){
+        pa.array[i*3+1] = groundH+0.05; // 停在地面上
+        fallState[i]='resting';
+        restCount++;
+        // 少量摇摇使就止
+        v.vx*=0; v.vy=0; v.vz*=0;
+      }
+    }
+    // 全部落地后，轻微淡出
+    if(!anyMoving && restCount>=FALL){
+      fallMat.opacity=Math.max(0, fallMat.opacity-dt*0.15);
     }
     pa.needsUpdate=true;
   }
