@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>桃树 · Peach Tree</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:#87ceeb; overflow:hidden; font-family:'PingFang SC','Microsoft YaHei',sans-serif; }
+#ui {
+  position:fixed; bottom:36px; left:50%; transform:translateX(-50%);
+  display:flex; gap:10px; z-index:10;
+}
+.btn {
+  padding:9px 20px; border-radius:22px; border:1px solid rgba(255,255,255,0.4);
+  background:rgba(255,255,255,0.25); color:rgba(60,30,10,0.85);
+  cursor:pointer; font-size:13px; backdrop-filter:blur(8px);
+  transition:all .25s; user-select:none; font-weight:500;
+}
+.btn:hover { background:rgba(255,255,255,0.45); }
+.btn.active { background:rgba(255,160,80,0.5); border-color:rgba(255,140,60,0.8); color:#7a2800; }
+#caption {
+  position:fixed; bottom:92px; left:50%; transform:translateX(-50%);
+  color:rgba(80,30,10,0.85); font-size:17px; letter-spacing:5px;
+  pointer-events:none; transition:opacity .7s;
+  text-shadow: 0 1px 8px rgba(255,255,255,0.6);
+}
+#title {
+  position:fixed; top:24px; left:50%; transform:translateX(-50%);
+  color:rgba(60,30,10,0.5); font-size:12px; letter-spacing:8px;
+  pointer-events:none;
+}
+</style>
+</head>
+<body>
+<div id="title">PEACH TREE · 桃树生长记</div>
+<div id="caption">桃树苗</div>
+<div id="ui">
+  <button class="btn active" onclick="goStage(0)">🌱 桃树苗</button>
+  <button class="btn" onclick="goStage(1)">🌿 生长</button>
+  <button class="btn" onclick="goStage(2)">🌸 桃花</button>
+  <button class="btn" onclick="goStage(3)">🍑 水蜜桃</button>
+  <button class="btn" onclick="goStage(4)">🍂 落叶</button>
+</div>
+
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js"}}</script>
+<script type="module">
+import * as THREE from 'three';
+
+// ── Renderer ──
+const renderer = new THREE.WebGLRenderer({ antialias:true });
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.setSize(innerWidth,innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.3;
+document.body.prepend(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x87ceeb);
+scene.fog = new THREE.Fog(0xc8e8f8, 40, 120);
+
+const camera = new THREE.PerspectiveCamera(48, innerWidth/innerHeight, 0.1, 500);
+camera.position.set(0, 6, 22);
+camera.lookAt(0, 6, 0);
+
+window.addEventListener('resize',()=>{
+  camera.aspect=innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth,innerHeight);
+});
+
+// ── Sky gradient ──
+const SKY = [
+  ['#a8d8f0','#d8eef8'],  // 苗 — 浅蓝晴天
+  ['#72c0e8','#c0e0f8'],  // 生长 — 明亮蓝
+  ['#88b8e8','#f0d8f0'],  // 桃花 — 淡粉蓝
+  ['#68b8e0','#f8e8c0'],  // 结果 — 暖蓝
+  ['#b0c8d8','#d8c880'],  // 落叶 — 秋日灰蓝
+];
+const skyCanvas = document.createElement('canvas');
+skyCanvas.width=2; skyCanvas.height=512;
+const skyCtx = skyCanvas.getContext('2d');
+const skyTex = new THREE.CanvasTexture(skyCanvas);
+const skyMesh = new THREE.Mesh(
+  new THREE.SphereGeometry(200,16,8),
+  new THREE.MeshBasicMaterial({map:skyTex,side:THREE.BackSide,depthWrite:false})
+);
+scene.add(skyMesh);
+
+function setSky(idx) {
+  const [top,bot] = SKY[idx];
+  const g = skyCtx.createLinearGradient(0,0,0,512);
+  g.addColorStop(0,top); g.addColorStop(1,bot);
+  skyCtx.fillStyle=g; skyCtx.fillRect(0,0,2,512);
+  skyTex.needsUpdate=true;
+  scene.background=new THREE.Color(top);
+}
+setSky(0);
+
+// ── Clouds ──
+function makeClouds() {
+  const clouds=[];
+  const mat=new THREE.MeshLambertMaterial({color:0xffffff,transparent:true,opacity:0.88});
+  for(let i=0;i<10;i++){
+    const g=new THREE.Group();
+    const n=3+Math.floor(Math.random()*3);
+    for(let k=0;k<n;k++){
+      const r=1.8+Math.random()*2.2;
+      const s=new THREE.Mesh(new THREE.SphereGeometry(r,8,6),mat.clone());
+      s.position.set((Math.random()-.5)*r*2.5,(Math.random()-.5)*r*0.35,(Math.random()-.5)*r*0.5);
+      g.add(s);
+    }
+    g.position.set((Math.random()-.5)*100,20+Math.random()*14,-35-Math.random()*50);
+    scene.add(g);
+    clouds.push({mesh:g,speed:0.006+Math.random()*0.01});
+  }
+  return clouds;
+}
+const clouds=makeClouds();
+
+// ── Lights ──
+const ambient=new THREE.AmbientLight(0xfff0e8,1.4);
+scene.add(ambient);
+const sun=new THREE.DirectionalLight(0xfff5e0,2.2);
+sun.position.set(8,20,12);
+sun.castShadow=true;
+sun.shadow.mapSize.set(2048,2048);
+sun.shadow.camera.near=1; sun.shadow.camera.far=60;
+sun.shadow.camera.left=-15; sun.shadow.camera.right=15;
+sun.shadow.camera.top=25; sun.shadow.camera.bottom=-5;
+scene.add(sun);
+const fill=new THREE.PointLight(0xc8e8ff,0.8,50);
+fill.position.set(-10,12,8);
+scene.add(fill);
+
+// ── Ground ──
+const ground=new THREE.Mesh(
+  new THREE.PlaneGeometry(100,100),
+  new THREE.MeshLambertMaterial({color:0x3a7a20})
+);
+ground.rotation.x=-Math.PI/2; ground.receiveShadow=true;
+scene.add(ground);
+
+// ── Build peach tree branches ──
+// Peach tree: shorter trunk, spreads wide at ~1/3 height, dense mid canopy
+const branches=[];
+function buildBranch(px,py,pz,dx,dy,dz,len,rad,depth){
+  if(depth>8||len<0.08) return;
+  const ex=px+dx*len, ey=py+dy*len, ez=pz+dz*len;
+  branches.push({px,py,pz,ex,ey,ez,rad,depth,id:branches.length});
+  if(depth>=8) return;
+  // Peach spreads wide early, more horizontal than vertical
+  const spreadBase = depth<2 ? 0.52 : 0.38;
+  const spread = spreadBase + (Math.random()-.5)*0.06;
+  const lr = len*(0.65+depth*0.004);
+  const up=new THREE.Vector3(0,1,0);
+  const dir=new THREE.Vector3(dx,dy,dz).normalize();
+  let ax=new THREE.Vector3().crossVectors(dir,up).normalize();
+  if(ax.lengthSq()<0.01) ax.set(1,0,0);
+  // twist around Y for natural spread
+  const twist=depth<3 ? (depth%2===0?0.3:-0.3) : (Math.random()-.5)*0.25;
+  const lDir=dir.clone().applyAxisAngle(ax,spread).applyAxisAngle(up,twist);
+  buildBranch(ex,ey,ez,lDir.x,lDir.y,lDir.z,lr,rad*0.72,depth+1);
+  const rDir=dir.clone().applyAxisAngle(ax,-spread*0.9).applyAxisAngle(up,-twist*0.8);
+  buildBranch(ex,ey,ez,rDir.x,rDir.y,rDir.z,lr*0.92,rad*0.70,depth+1);
+  if(depth<3&&Math.random()<0.3){
+    const mDir=dir.clone().applyAxisAngle(up,(Math.random()-.5)*0.8);
+    buildBranch(ex,ey,ez,mDir.x,mDir.y,mDir.z,lr*0.6,rad*0.55,depth+2);
+  }
+}
+buildBranch(0,0,0, 0,1,0, 3.8, 0.16, 0);
+const TOTAL=branches.length;
+const tips=branches.filter(b=>b.depth>=5);
+
+// Branch meshes
+const branchMeshes=[];
+const bGroup=new THREE.Group(); scene.add(bGroup);
+for(const b of branches){
+  const s=new THREE.Vector3(b.px,b.py,b.pz);
+  const e=new THREE.Vector3(b.ex,b.ey,b.ez);
+  const d=e.clone().sub(s); const l=d.length();
+  // Peach wood: reddish brown
+  const hue=0.06; const light=0.15+b.depth*0.008;
+  const geo=new THREE.CylinderGeometry(b.rad*0.5,b.rad,l,6,1);
+  const mat=new THREE.MeshLambertMaterial({color:new THREE.Color().setHSL(hue,0.45,light)});
+  const m=new THREE.Mesh(geo,mat);
+  m.position.copy(s.clone().lerp(e,0.5));
+  m.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),d.normalize());
+  m.castShadow=true; m.scale.y=0; m.userData.id=b.id;
+  bGroup.add(m); branchMeshes.push(m);
+}
+
+// ── Texture makers ──
+function makeLeafTex(hue,sat,light){
+  const c=document.createElement('canvas'); c.width=80; c.height=48;
+  const x=c.getContext('2d');
+  x.save(); x.translate(40,24);
+  // elongated peach leaf
+  x.beginPath();
+  x.moveTo(0,-22);
+  x.bezierCurveTo(18,-14, 20,8, 0,20);
+  x.bezierCurveTo(-20,8, -18,-14, 0,-22);
+  const g=x.createLinearGradient(0,-22,0,20);
+  g.addColorStop(0,`hsla(${hue},${sat}%,${light+8}%,1)`);
+  g.addColorStop(0.5,`hsla(${hue},${sat}%,${light}%,0.95)`);
+  g.addColorStop(1,`hsla(${hue-5},${sat-10}%,${light-5}%,0.8)`);
+  x.fillStyle=g; x.fill();
+  // midrib + veins
+  x.strokeStyle=`hsla(${hue},${sat-20}%,${light-12}%,0.5)`;
+  x.lineWidth=1.5; x.beginPath(); x.moveTo(0,-20); x.lineTo(0,18); x.stroke();
+  for(let i=-3;i<=3;i++){
+    x.beginPath(); x.moveTo(0,i*4);
+    x.lineTo(i%2===0?12:10,i*4+(i>0?4:-4));
+    x.globalAlpha=0.35; x.stroke(); x.globalAlpha=1;
+  }
+  x.restore();
+  return new THREE.CanvasTexture(c);
+}
+
+function makePeachFlowerTex(){
+  const c=document.createElement('canvas'); c.width=c.height=80;
+  const x=c.getContext('2d');
+  const cx=40,cy=40,pr=28;
+  // 5 petals — deep pink, heart-shaped
+  for(let i=0;i<5;i++){
+    const a=(i/5)*Math.PI*2-Math.PI/2;
+    x.save(); x.translate(cx+Math.cos(a)*pr*0.55, cy+Math.sin(a)*pr*0.55);
+    x.rotate(a+Math.PI/2);
+    x.beginPath();
+    // heart-ish petal shape
+    x.moveTo(0,-pr*0.55);
+    x.bezierCurveTo(pr*0.5,-pr*0.45, pr*0.5,pr*0.2, 0,pr*0.5);
+    x.bezierCurveTo(-pr*0.5,pr*0.2, -pr*0.5,-pr*0.45, 0,-pr*0.55);
+    const g=x.createRadialGradient(0,0,0,0,0,pr*0.6);
+    g.addColorStop(0,'rgba(255,190,200,0.98)');
+    g.addColorStop(0.5,'rgba(245,130,160,0.9)');
+    g.addColorStop(1,'rgba(230,100,140,0.0)');
+    x.fillStyle=g; x.fill(); x.restore();
+  }
+  // stamens
+  for(let i=0;i<12;i++){
+    const a=(i/12)*Math.PI*2;
+    x.beginPath();
+    x.moveTo(cx+Math.cos(a)*4,cy+Math.sin(a)*4);
+    x.lineTo(cx+Math.cos(a)*12,cy+Math.sin(a)*12);
+    x.strokeStyle='rgba(255,200,80,0.8)'; x.lineWidth=1; x.stroke();
+    x.beginPath(); x.arc(cx+Math.cos(a)*13,cy+Math.sin(a)*13,1.5,0,Math.PI*2);
+    x.fillStyle='rgba(255,180,60,0.9)'; x.fill();
+  }
+  // center
+  x.beginPath(); x.arc(cx,cy,4,0,Math.PI*2);
+  x.fillStyle='rgba(255,160,60,0.95)'; x.fill();
+  return new THREE.CanvasTexture(c);
+}
+
+function makePeachTex(){
+  const c=document.createElement('canvas'); c.width=c.height=80;
+  const x=c.getContext('2d');
+  const cx=40,cy=42,r=28;
+  // peach body — two lobes shape
+  x.beginPath();
+  x.moveTo(cx,cy-r);
+  x.bezierCurveTo(cx+r*1.1,cy-r*0.6, cx+r*1.0,cy+r*0.5, cx,cy+r*0.85);
+  x.bezierCurveTo(cx-r*1.0,cy+r*0.5, cx-r*1.1,cy-r*0.6, cx,cy-r);
+  // gradient: yellow bottom, rosy red top
+  const g=x.createRadialGradient(cx-8,cy-10,2,cx,cy,r*1.1);
+  g.addColorStop(0,'rgba(255,220,80,1)');
+  g.addColorStop(0.35,'rgba(255,180,80,0.95)');
+  g.addColorStop(0.65,'rgba(240,100,80,0.9)');
+  g.addColorStop(1,'rgba(200,50,60,0.0)');
+  x.fillStyle=g; x.fill();
+  // center crease
+  x.beginPath(); x.moveTo(cx,cy-r*0.9); x.quadraticCurveTo(cx+3,cy,cx,cy+r*0.8);
+  x.strokeStyle='rgba(180,60,50,0.25)'; x.lineWidth=2.5; x.stroke();
+  // shine
+  x.beginPath(); x.ellipse(cx-9,cy-12,7,5,-0.5,0,Math.PI*2);
+  x.fillStyle='rgba(255,255,255,0.35)'; x.fill();
+  // stem stub
+  x.beginPath(); x.moveTo(cx,cy-r); x.lineTo(cx+3,cy-r-6);
+  x.strokeStyle='rgba(80,120,30,0.8)'; x.lineWidth=2; x.lineCap='round'; x.stroke();
+  return new THREE.CanvasTexture(c);
+}
+
+function makeYellowLeafTex(){
+  return makeLeafTex(30,80,52);  // autumn yellow-orange
+}
+
+// ── Build textures ──
+const greenLeafTex   = makeLeafTex(105,65,35);
+const peachFlowerTex = makePeachFlowerTex();
+const peachTex       = makePeachTex();
+const yellowLeafTex  = makeYellowLeafTex();
+
+// ── Tip positions ──
+const allTipPos=[];
+for(const b of tips){
+  for(let k=0;k<5;k++)
+    allTipPos.push(new THREE.Vector3(
+      b.ex+(Math.random()-.5)*0.7,
+      b.ey+(Math.random()-.5)*0.5,
+      b.ez+(Math.random()-.5)*0.7
+    ));
+}
+const tipPositions=tips.map(b=>new THREE.Vector3(b.ex,b.ey,b.ez));
+
+function makeParticles(count,tex,size,positions,sizeAtt=false){
+  const pa=new Float32Array(count*3);
+  for(let i=0;i<count;i++){
+    const p=positions[i%positions.length];
+    pa[i*3]=p.x+(Math.random()-.5)*0.4;
+    pa[i*3+1]=p.y+(Math.random()-.5)*0.4;
+    pa[i*3+2]=p.z+(Math.random()-.5)*0.4;
+  }
+  const geo=new THREE.BufferGeometry();
+  geo.setAttribute('position',new THREE.BufferAttribute(pa,3));
+  const mat=new THREE.PointsMaterial({
+    map:tex, size, transparent:true, opacity:0,
+    depthWrite:false, alphaTest:0.05,
+    sizeAttenuation:true,
+  });
+  return new THREE.Points(geo,mat);
+}
+
+const flowerPts  = makeParticles(500, peachFlowerTex, 0.38, allTipPos);
+const greenPts   = makeParticles(450, greenLeafTex,   0.32, allTipPos);
+const peachPts   = makeParticles(130, peachTex,       0.30, tipPositions);
+scene.add(flowerPts); scene.add(greenPts); scene.add(peachPts);
+
+// ── Falling leaves ──
+const FALL=350;
+const fallGeo=new THREE.BufferGeometry();
+const fallPos=new Float32Array(FALL*3);
+const fallVel=[];
+function resetLeaf(i){
+  fallPos[i*3]  =(Math.random()-.5)*18;
+  fallPos[i*3+1]=8+Math.random()*8;
+  fallPos[i*3+2]=(Math.random()-.5)*10;
+  fallVel[i]={vx:(Math.random()-.5)*0.05, vy:-(0.03+Math.random()*0.04),
+              vz:(Math.random()-.5)*0.02, phase:Math.random()*Math.PI*2};
+}
+for(let i=0;i<FALL;i++) resetLeaf(i);
+fallGeo.setAttribute('position',new THREE.BufferAttribute(fallPos,3));
+const fallMat=new THREE.PointsMaterial({
+  map:yellowLeafTex, size:0.38, transparent:true,
+  opacity:0, depthWrite:false, alphaTest:0.05,
+});
+const fallingLeaves=new THREE.Points(fallGeo,fallMat);
+scene.add(fallingLeaves);
+
+// ── Sprout ──
+const sproutGroup=new THREE.Group();
+// reddish stem (peach seedling stem is red)
+const stemMat=new THREE.MeshLambertMaterial({color:0xc84820});
+const stemMesh=new THREE.Mesh(new THREE.CylinderGeometry(0.025,0.055,0.55,6),stemMat);
+stemMesh.position.y=0.27; stemMesh.scale.y=0; stemMesh.castShadow=true;
+sproutGroup.add(stemMesh);
+// two tiny cotyledon leaves
+for(let side of [-1,1]){
+  const lm=new THREE.Mesh(
+    new THREE.PlaneGeometry(0.45,0.28),
+    new THREE.MeshLambertMaterial({map:greenLeafTex,transparent:true,alphaTest:0.05,side:THREE.DoubleSide})
+  );
+  lm.position.set(side*0.2,0.48,0);
+  lm.rotation.z=side*0.65; lm.rotation.y=side*0.2;
+  lm.scale.setScalar(0); lm.userData.isSproutLeaf=true;
+  sproutGroup.add(lm);
+}
+scene.add(sproutGroup);
+
+// ── State ──
+const CAPTIONS=['桃树苗','枝叶生长','桃花盛开','水蜜桃','叶落归根'];
+let targetStage=0;
+const state={sprout:0,grow:0,greenLeaf:0,flower:0,fruit:0,fall:0};
+const btns=document.querySelectorAll('.btn');
+
+window.goStage=s=>{
+  targetStage=s;
+  btns.forEach((b,i)=>b.classList.toggle('active',i===s));
+  const cap=document.getElementById('caption');
+  cap.style.opacity='0';
+  setTimeout(()=>{cap.textContent=CAPTIONS[s];cap.style.opacity='1';},350);
+  setSky(s);
+  const sunI=[1.2,2.0,1.6,2.2,1.0];
+  sun.intensity=sunI[s];
+  const ambC=[0xfff0e8,0xf0ffe0,0xffe8f8,0xfff0d0,0xf0e8c0];
+  ambient.color.setHex(ambC[s]);
+};
+
+// ── Helpers ──
+const lerp=(a,b,t)=>a+(b-a)*Math.min(1,Math.max(0,t));
+const clamp=t=>Math.min(1,Math.max(0,t));
+const easeOut=t=>1-Math.pow(1-clamp(t),2);
+const easeBack=t=>{t=clamp(t);return 1+2.7*Math.pow(t-1,3)+1.7*Math.pow(t-1,2);};
+const easeIO=t=>{t=clamp(t);return t<.5?2*t*t:-1+(4-2*t)*t;};
+
+const clock=new THREE.Clock();
+let elapsed=0;
+
+renderer.setAnimationLoop(()=>{
+  const dt=clock.getDelta(); elapsed+=dt;
+  const sp=dt*0.75;
+
+  state.sprout    =lerp(state.sprout,    targetStage>=0?1:0, sp*2.2);
+  state.grow      =lerp(state.grow,      targetStage>=1?1:0, sp*0.65);
+  state.greenLeaf =lerp(state.greenLeaf, (targetStage===1||targetStage===3)?1:0, sp*0.55);
+  state.flower    =lerp(state.flower,    targetStage===2?1:0, sp*0.6);
+  state.fruit     =lerp(state.fruit,     targetStage===3?1:0, sp*0.5);
+  state.fall      =lerp(state.fall,      targetStage===4?1:0, sp*0.55);
+
+  // Sprout: fades when branches grow OR at fall stage
+  const sproutFade=clamp(1-state.grow/0.35)*clamp(1-state.fall/0.3);
+  stemMesh.scale.y=easeBack(clamp(state.sprout*1.8))*sproutFade;
+  sproutGroup.children.forEach(c=>{
+    if(c.userData.isSproutLeaf){
+      c.scale.setScalar(easeBack(clamp((state.sprout-0.4)*2))*sproutFade);
+    }
+  });
+
+  // Branches
+  const bReveal=easeIO(state.grow)*TOTAL;
+  for(const m of branchMeshes){
+    const t=clamp((bReveal-m.userData.id)/Math.max(1,TOTAL*0.05));
+    m.scale.y=easeIO(t);
+  }
+
+  // Particles
+  greenPts.material.opacity  =easeOut(state.greenLeaf)*0.88;
+  flowerPts.material.opacity =easeOut(state.flower)*0.92;
+  flowerPts.material.size    =0.36+Math.sin(elapsed*1.2)*0.025; // gentle sway
+  peachPts.material.opacity  =easeOut(state.fruit)*0.95;
+  peachPts.material.size     =0.28+Math.sin(elapsed*0.9)*0.015;
+
+  // Falling leaves
+  fallMat.opacity=easeOut(state.fall)*0.90;
+  if(state.fall>0.05){
+    const pa=fallGeo.getAttribute('position');
+    for(let i=0;i<FALL;i++){
+      const v=fallVel[i];
+      pa.array[i*3]  +=v.vx+Math.sin(elapsed*0.6+v.phase)*0.018;
+      pa.array[i*3+1]+=v.vy*state.fall;
+      pa.array[i*3+2]+=v.vz;
+      if(pa.array[i*3+1]<-0.5) resetLeaf(i);
+    }
+    pa.needsUpdate=true;
+  }
+
+  // Camera gentle orbit
+  camera.position.x=Math.sin(elapsed*0.09)*2.2;
+  camera.position.z=22+Math.sin(elapsed*0.06)*1.8;
+  camera.position.y=6+Math.sin(elapsed*0.07)*0.6;
+  camera.lookAt(0,6,0);
+
+  // Clouds drift
+  for(const c of clouds){
+    c.mesh.position.x+=c.speed;
+    if(c.mesh.position.x>65) c.mesh.position.x=-65;
+  }
+
+  // Sun drift
+  sun.position.x=8+Math.sin(elapsed*0.04)*4;
+  sun.position.z=12+Math.cos(elapsed*0.04)*4;
+
+  renderer.render(scene,camera);
+});
+</script>
+</body>
+</html>
