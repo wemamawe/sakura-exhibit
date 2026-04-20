@@ -3,35 +3,31 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Tree of Life v3</title>
+<title>Tree of Life v4</title>
 <style>
 * { margin:0; padding:0; box-sizing:border-box; }
-body { background:#0d1117; display:flex; flex-direction:column; align-items:center;
-       justify-content:center; min-height:100vh; overflow:hidden; }
-canvas { display:block; }
+body { background:#000; overflow:hidden; font-family:'PingFang SC','Microsoft YaHei',sans-serif; }
 #ui {
   position:fixed; bottom:36px; left:50%; transform:translateX(-50%);
   display:flex; gap:10px; z-index:10;
 }
 .btn {
   padding:8px 18px; border-radius:20px; border:1px solid rgba(255,255,255,0.2);
-  background:rgba(255,255,255,0.06); color:rgba(255,255,255,0.7);
-  cursor:pointer; font-size:13px; font-family:'PingFang SC','Microsoft YaHei',sans-serif;
+  background:rgba(0,0,0,0.4); color:rgba(255,255,255,0.7);
+  cursor:pointer; font-size:13px; backdrop-filter:blur(6px);
   transition:all .25s; user-select:none;
 }
-.btn:hover { background:rgba(255,255,255,0.14); }
-.btn.active { background:rgba(255,210,140,0.2); border-color:rgba(255,210,140,0.6); color:#ffd88a; }
+.btn:hover { background:rgba(255,255,255,0.12); }
+.btn.active { background:rgba(255,210,120,0.2); border-color:rgba(255,210,120,0.6); color:#ffd890; }
 #caption {
-  position:fixed; bottom:90px; left:50%; transform:translateX(-50%);
-  color:rgba(255,255,255,0.65); font-size:17px; letter-spacing:5px;
-  font-family:'PingFang SC','Microsoft YaHei',serif;
+  position:fixed; bottom:92px; left:50%; transform:translateX(-50%);
+  color:rgba(255,255,255,0.7); font-size:17px; letter-spacing:5px;
   pointer-events:none; transition:opacity .7s;
-  text-shadow: 0 0 18px rgba(255,200,120,0.4);
+  text-shadow:0 0 20px rgba(255,200,100,0.5);
 }
 </style>
 </head>
 <body>
-<canvas id="c"></canvas>
 <div id="caption">种子破土</div>
 <div id="ui">
   <button class="btn active" onclick="goStage(0)">🌱 发芽</button>
@@ -40,302 +36,383 @@ canvas { display:block; }
   <button class="btn" onclick="goStage(3)">🍑 结果</button>
   <button class="btn" onclick="goStage(4)">🍂 落叶</button>
 </div>
-<script>
-const canvas = document.getElementById('c');
-const ctx = canvas.getContext('2d');
-let W, H, OX, OY;
 
-function resize() {
-  W = canvas.width  = window.innerWidth;
-  H = canvas.height = window.innerHeight;
-  OX = W / 2;
-  OY = H * 0.82;
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js"}}</script>
+<script type="module">
+import * as THREE from 'three';
+
+// ── Renderer ──
+const renderer = new THREE.WebGLRenderer({ antialias:true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.2;
+document.body.prepend(renderer.domElement);
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(50, innerWidth/innerHeight, 0.1, 500);
+camera.position.set(0, 5, 18);
+camera.lookAt(0, 5, 0);
+
+window.addEventListener('resize', () => {
+  camera.aspect = innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+// ── Sky (gradient + fog) ──
+const SKY_CONFIGS = [
+  { top:'#0a0e1a', bot:'#0d1825', fog:0x0a0e1a },  // 发芽 — deep night
+  { top:'#0d1e30', bot:'#1a2d1a', fog:0x0d1e30 },  // 生长 — dawn
+  { top:'#1a0820', bot:'#0d0a1a', fog:0x150a1a },  // 开花 — dusk
+  { top:'#1e1208', bot:'#0e0d10', fog:0x180e08 },  // 结果 — warm eve
+  { top:'#0e1008', bot:'#080808', fog:0x0a0a08 },  // 落叶 — autumn dusk
+];
+
+// Sky plane (canvas texture)
+const skyCanvas = document.createElement('canvas');
+skyCanvas.width = 2; skyCanvas.height = 512;
+const skyCtx = skyCanvas.getContext('2d');
+const skyTex = new THREE.CanvasTexture(skyCanvas);
+const skyMat = new THREE.MeshBasicMaterial({ map:skyTex, side:THREE.BackSide, depthWrite:false });
+const skyGeo = new THREE.SphereGeometry(200, 16, 8);
+const skyMesh = new THREE.Mesh(skyGeo, skyMat);
+scene.add(skyMesh);
+
+function updateSky(cfg) {
+  const g = skyCtx.createLinearGradient(0,0,0,512);
+  g.addColorStop(0, cfg.top); g.addColorStop(1, cfg.bot);
+  skyCtx.fillStyle=g; skyCtx.fillRect(0,0,2,512);
+  skyTex.needsUpdate = true;
+  scene.fog = new THREE.Fog(cfg.fog, 30, 120);
+  scene.background = new THREE.Color(cfg.top);
 }
-resize();
-window.addEventListener('resize', resize);
+updateSky(SKY_CONFIGS[0]);
 
-// ── Build tree ──
-// Each node: {x1,y1,x2,y2,depth,len,angle}
-const NODES = [];
-function buildTree(x, y, angle, len, depth) {
-  if (depth > 9 || len < 4) return;
-  const x2 = x + Math.cos(angle) * len;
-  const y2 = y + Math.sin(angle) * len;
-  NODES.push({ x1:x, y1:y, x2, y2, depth, len,
-               sw: Math.max(0.5, (9-depth)*0.6 + 0.5) });
-  // controlled spread — tighter at top, wider at base
-  const spread = 0.32 + depth*0.012;
-  const lenScale = 0.68 + depth*0.003;
-  // left branch — mirror of right for natural symmetry
-  buildTree(x2, y2, angle - spread,
-            len*lenScale, depth+1);
-  buildTree(x2, y2, angle + spread,
-            len*(lenScale-0.03), depth+1);
+// ── Lights ──
+const ambientLight = new THREE.AmbientLight(0x334466, 0.8);
+scene.add(ambientLight);
+
+const sunLight = new THREE.DirectionalLight(0xfff0dd, 2.0);
+sunLight.position.set(8, 20, 10);
+sunLight.castShadow = true;
+sunLight.shadow.mapSize.set(2048, 2048);
+sunLight.shadow.camera.near = 1;
+sunLight.shadow.camera.far = 60;
+sunLight.shadow.camera.left = -15;
+sunLight.shadow.camera.right = 15;
+sunLight.shadow.camera.top = 20;
+sunLight.shadow.camera.bottom = -5;
+scene.add(sunLight);
+
+const fillLight = new THREE.PointLight(0x6644cc, 1.2, 40);
+fillLight.position.set(-8, 10, 5);
+scene.add(fillLight);
+
+const rimLight = new THREE.PointLight(0xffa060, 0.8, 30);
+rimLight.position.set(5, 8, -8);
+scene.add(rimLight);
+
+// ── Ground ──
+const groundGeo = new THREE.PlaneGeometry(80, 80, 1, 1);
+const groundMat = new THREE.MeshLambertMaterial({ color:0x0d1a0a });
+const ground = new THREE.Mesh(groundGeo, groundMat);
+ground.rotation.x = -Math.PI/2;
+ground.receiveShadow = true;
+scene.add(ground);
+
+// ── Build tree branch data ──
+const branches = [];
+function buildBranch(px,py,pz, dx,dy,dz, len, radius, depth) {
+  if (depth > 8 || len < 0.1) return;
+  const ex = px+dx*len, ey = py+dy*len, ez = pz+dz*len;
+  branches.push({px,py,pz,ex,ey,ez,radius,depth,order:branches.length});
+  if (depth >= 8) return;
+  const spread = 0.38 + depth*0.01;
+  const lr = len*(0.67+depth*0.003);
+  // rotate dir left
+  const up = new THREE.Vector3(0,1,0);
+  const dir = new THREE.Vector3(dx,dy,dz).normalize();
+  const lAxis = new THREE.Vector3().crossVectors(dir, up).normalize();
+  if (lAxis.lengthSq() < 0.01) lAxis.set(1,0,0);
+  const lDir = dir.clone().applyAxisAngle(lAxis, spread);
+  buildBranch(ex,ey,ez, lDir.x,lDir.y,lDir.z, lr, radius*0.7, depth+1);
+  const rDir = dir.clone().applyAxisAngle(lAxis, -spread*0.9);
+  // slight random twist around Y per branch
+  rDir.applyAxisAngle(up, (depth%2===0?0.2:-0.2));
+  buildBranch(ex,ey,ez, rDir.x,rDir.y,rDir.z, lr*0.95, radius*0.68, depth+1);
 }
-// deterministic seed
-let _s = 137;
-const _r = () => { _s=(_s*6364136223846793005n?_s:(_s*1664525+1013904223))&0x7fffffff; return _s/0x7fffffff; };
-// simpler seeded random
-const rng = (()=>{ let s=137; return ()=>{ s=(s*1664525+1013904223)&0xffffffff; return (s>>>0)/0xffffffff; }; })();
-const origRnd = Math.random; Math.random = rng;
-buildTree(0, 0, -Math.PI/2, 105, 0);
-Math.random = origRnd;
+buildBranch(0,0,0, 0,1,0, 2.8, 0.14, 0);
 
-const TOTAL = NODES.length;
-const TIPS  = NODES.filter(n => n.depth >= 6);
+const TOTAL = branches.length;
+const tips = branches.filter(b=>b.depth>=6);
 
-// ── Flowers ──
-const FLOWERS = [];
-for (const n of TIPS) {
-  const count = 2 + Math.floor(Math.random()*4);
-  for (let k=0; k<count; k++) {
-    const t = 0.5 + Math.random()*0.5;
-    FLOWERS.push({
-      x: n.x1+(n.x2-n.x1)*t + (Math.random()-.5)*12,
-      y: n.y1+(n.y2-n.y1)*t + (Math.random()-.5)*12,
-      r: 3.5 + Math.random()*4,
-      hue: 338 + Math.floor(Math.random()*18),
-      phase: Math.random()*Math.PI*2,
-    });
+// ── Branch meshes ──
+const branchGroup = new THREE.Group();
+scene.add(branchGroup);
+const branchMeshes = [];
+for (const b of branches) {
+  const start = new THREE.Vector3(b.px,b.py,b.pz);
+  const end   = new THREE.Vector3(b.ex,b.ey,b.ez);
+  const dir   = end.clone().sub(start);
+  const len   = dir.length();
+  const geo   = new THREE.CylinderGeometry(b.radius*0.55, b.radius, len, 5, 1);
+  const mat   = new THREE.MeshLambertMaterial({ color:new THREE.Color().setHSL(0.07, 0.4, 0.12+b.depth*0.01) });
+  const mesh  = new THREE.Mesh(geo, mat);
+  mesh.position.copy(start.clone().lerp(end, 0.5));
+  mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0), dir.normalize());
+  mesh.castShadow = true;
+  mesh.scale.y = 0;
+  mesh.userData.order = b.order;
+  branchGroup.add(mesh);
+  branchMeshes.push(mesh);
+}
+
+// ── Texture canvas helpers ──
+function makeCircleTex(size, color, blur=0.3) {
+  const c = document.createElement('canvas'); c.width=c.height=size;
+  const x = c.getContext('2d');
+  const g = x.createRadialGradient(size/2,size/2,0, size/2,size/2,size/2);
+  g.addColorStop(0, color);
+  g.addColorStop(1-blur, color);
+  g.addColorStop(1, 'rgba(0,0,0,0)');
+  x.fillStyle=g; x.fillRect(0,0,size,size);
+  return new THREE.CanvasTexture(c);
+}
+
+function makeLeafTex(size, hue, light=0.45) {
+  const c = document.createElement('canvas'); c.width=size; c.height=size*0.6;
+  const x = c.getContext('2d');
+  // leaf shape
+  x.save();
+  x.translate(size/2, size*0.3);
+  x.beginPath();
+  x.moveTo(0, -size*0.28);
+  x.bezierCurveTo(size*0.35,-size*0.18, size*0.38,size*0.05, 0,size*0.24);
+  x.bezierCurveTo(-size*0.38,size*0.05, -size*0.35,-size*0.18, 0,-size*0.28);
+  const g = x.createRadialGradient(0,-size*0.05,0, 0,0,size*0.35);
+  g.addColorStop(0, `hsla(${hue},70%,${light*100+15}%,1)`);
+  g.addColorStop(0.6, `hsla(${hue},65%,${light*100}%,0.9)`);
+  g.addColorStop(1, 'rgba(0,0,0,0)');
+  x.fillStyle=g; x.fill();
+  // midrib
+  x.beginPath(); x.moveTo(0,-size*0.26); x.lineTo(0,size*0.22);
+  x.strokeStyle=`hsla(${hue},50%,${light*100-10}%,0.6)`; x.lineWidth=size*0.025; x.stroke();
+  x.restore();
+  return new THREE.CanvasTexture(c);
+}
+
+function makeFlowerTex(size) {
+  const c = document.createElement('canvas'); c.width=c.height=size;
+  const x = c.getContext('2d');
+  const cx=size/2, cy=size/2, pr=size*0.38;
+  for (let i=0;i<5;i++) {
+    const a=(i/5)*Math.PI*2;
+    x.beginPath();
+    x.ellipse(cx+Math.cos(a)*pr*0.9, cy+Math.sin(a)*pr*0.9, pr*0.55,pr*0.32, a,0,Math.PI*2);
+    const g=x.createRadialGradient(cx+Math.cos(a)*pr*0.9,cy+Math.sin(a)*pr*0.9,0,cx,cy,pr*1.5);
+    g.addColorStop(0,'rgba(255,210,220,0.95)');
+    g.addColorStop(0.5,'rgba(240,160,180,0.8)');
+    g.addColorStop(1,'rgba(0,0,0,0)');
+    x.fillStyle=g; x.fill();
+  }
+  // center
+  x.beginPath(); x.arc(cx,cy,pr*0.25,0,Math.PI*2);
+  x.fillStyle='rgba(255,180,100,0.95)'; x.fill();
+  return new THREE.CanvasTexture(c);
+}
+
+// ── Textures ──
+const flowerTex  = makeFlowerTex(64);
+const greenLeafTex  = makeLeafTex(64, 105, 0.35);  // green
+const yellowLeafTex = makeLeafTex(64, 28,  0.5);   // autumn yellow
+const fruitTex   = makeCircleTex(32, 'rgba(240,80,30,0.95)', 0.25);
+
+// ── Particle systems ──
+function makeParticles(count, tex, size, positions) {
+  const posArr = new Float32Array(count*3);
+  for (let i=0;i<count;i++) {
+    const p = positions[i % positions.length];
+    posArr[i*3]   = p.x + (Math.random()-.5)*0.5;
+    posArr[i*3+1] = p.y + (Math.random()-.5)*0.5;
+    posArr[i*3+2] = p.z + (Math.random()-.5)*0.5;
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(posArr,3));
+  const mat = new THREE.PointsMaterial({
+    map: tex, size, transparent:true, opacity:0,
+    depthWrite:false, alphaTest:0.05,
+    blending: THREE.NormalBlending,
+  });
+  return new THREE.Points(geo, mat);
+}
+
+// Tip positions for attaching particles
+const tipPositions = tips.map(b=>new THREE.Vector3(b.ex,b.ey,b.ez));
+const allTipPos = [];
+for (const b of tips) {
+  for (let k=0;k<4;k++) {
+    allTipPos.push(new THREE.Vector3(
+      b.ex+(Math.random()-.5)*0.6,
+      b.ey+(Math.random()-.5)*0.4,
+      b.ez+(Math.random()-.5)*0.6
+    ));
   }
 }
 
-// ── Fruits ──
-const FRUITS = [];
-for (const n of TIPS) {
-  if (Math.random() < 0.45) {
-    FRUITS.push({
-      x: n.x2 + (Math.random()-.5)*8,
-      y: n.y2 + Math.random()*6,
-      r: 5 + Math.random()*4,
-      hue: 10 + Math.floor(Math.random()*25),
-      phase: Math.random()*Math.PI*2,
-    });
-  }
-}
+const flowerParticles  = makeParticles(500, flowerTex, 0.35, allTipPos);
+const greenLeafParticles = makeParticles(400, greenLeafTex, 0.3, allTipPos);
+const fruitParticles   = makeParticles(120, fruitTex, 0.22, tipPositions);
+scene.add(flowerParticles);
+scene.add(greenLeafParticles);
+scene.add(fruitParticles);
 
-// ── Falling leaves ──
-const LEAVES = Array.from({length:280}, (_, i) => ({
-  x: (Math.random()-.5)*600,
-  y: -Math.random()*400,
-  vx: (Math.random()-.5)*0.8,
-  vy: 0.6+Math.random()*1.0,
-  rot: Math.random()*Math.PI*2,
-  vrot: (Math.random()-.5)*0.06,
-  rx: 5+Math.random()*4,
-  ry: 2.5+Math.random()*2,
-  hue: 22+Math.floor(Math.random()*30),
-  phase: Math.random()*Math.PI*2,
-}));
+// ── Falling leaf system (dynamic) ──
+const FALL_COUNT = 350;
+const fallGeo = new THREE.BufferGeometry();
+const fallPos = new Float32Array(FALL_COUNT*3);
+const fallVel = [];
+function resetLeaf(i) {
+  fallPos[i*3]   = (Math.random()-.5)*16;
+  fallPos[i*3+1] = 6 + Math.random()*8;
+  fallPos[i*3+2] = (Math.random()-.5)*8;
+  fallVel[i] = {
+    vx:(Math.random()-.5)*0.04,
+    vy:-(0.025+Math.random()*0.04),
+    vz:(Math.random()-.5)*0.02,
+    phase:Math.random()*Math.PI*2,
+  };
+}
+for (let i=0;i<FALL_COUNT;i++) resetLeaf(i);
+fallGeo.setAttribute('position', new THREE.BufferAttribute(fallPos,3));
+const fallMat = new THREE.PointsMaterial({
+  map: yellowLeafTex, size:0.32, transparent:true,
+  opacity:0, depthWrite:false, alphaTest:0.05,
+});
+const fallingLeaves = new THREE.Points(fallGeo, fallMat);
+scene.add(fallingLeaves);
+
+// ── Sprout mesh ──
+const sproutGroup = new THREE.Group();
+// stem
+const stemGeo = new THREE.CylinderGeometry(0.025, 0.05, 0.5, 5);
+const stemMat = new THREE.MeshLambertMaterial({ color:0x4a8a20 });
+const stemMesh = new THREE.Mesh(stemGeo, stemMat);
+stemMesh.position.y = 0.25; stemMesh.scale.y = 0; stemMesh.castShadow=true;
+sproutGroup.add(stemMesh);
+// two small leaves on sprout
+for (let side of [-1,1]) {
+  const lg = new THREE.PlaneGeometry(0.4, 0.25);
+  const lm = new THREE.MeshLambertMaterial({ map:greenLeafTex, transparent:true, alphaTest:0.05, side:THREE.DoubleSide });
+  const lmesh = new THREE.Mesh(lg, lm);
+  lmesh.position.set(side*0.18, 0.42, 0);
+  lmesh.rotation.z = side * 0.6;
+  lmesh.scale.setScalar(0);
+  lmesh.userData.isSproutLeaf = true;
+  sproutGroup.add(lmesh);
+}
+scene.add(sproutGroup);
 
 // ── State ──
 const CAPTIONS = ['种子破土','枝叶生长','繁花盛开','硕果累累','落叶归根'];
 let targetStage = 0;
-const state = { sprout:0, grow:0, flower:0, fruit:0, fall:0 };
+const state = { sprout:0, grow:0, greenLeaf:0, flower:0, fruit:0, fall:0 };
 
-const buttons = document.querySelectorAll('.btn');
+const btns = document.querySelectorAll('.btn');
 window.goStage = s => {
   targetStage = s;
-  buttons.forEach((b,i) => b.classList.toggle('active', i===s));
-  const cap = document.getElementById('caption');
-  cap.style.opacity = '0';
-  setTimeout(()=>{ cap.textContent = CAPTIONS[s]; cap.style.opacity='1'; }, 350);
+  btns.forEach((b,i)=>b.classList.toggle('active',i===s));
+  const cap=document.getElementById('caption');
+  cap.style.opacity='0';
+  setTimeout(()=>{cap.textContent=CAPTIONS[s];cap.style.opacity='1';},350);
+  updateSky(SKY_CONFIGS[s]);
+  // adjust lights
+  const sunIntensities=[0.6,1.2,0.9,1.5,0.7];
+  sunLight.intensity = sunIntensities[s];
+  const ambColors=[0x223355,0x334422,0x331122,0x332211,0x222211];
+  ambientLight.color.setHex(ambColors[s]);
 };
 
 // ── Helpers ──
-function lerp(a,b,t){ return a+(b-a)*Math.min(1,Math.max(0,t)); }
-function easeOut(t){ return 1-Math.pow(1-Math.min(1,Math.max(0,t)),2); }
-function easeBack(t){
-  t=Math.min(1,Math.max(0,t));
-  return 1+2.7*Math.pow(t-1,3)+1.7*Math.pow(t-1,2);
-}
-function easeInOut(t){ t=Math.min(1,Math.max(0,t)); return t<.5?2*t*t:-1+(4-2*t)*t; }
+const lerp=(a,b,t)=>a+(b-a)*Math.min(1,Math.max(0,t));
+const clamp=(t)=>Math.min(1,Math.max(0,t));
+const easeOut=(t)=>1-Math.pow(1-clamp(t),2);
+const easeBack=(t)=>{t=clamp(t);return 1+2.7*Math.pow(t-1,3)+1.7*Math.pow(t-1,2);};
+const easeIO=(t)=>{t=clamp(t);return t<.5?2*t*t:-1+(4-2*t)*t;};
 
-// ── Draw helpers ──
-function drawFlower(x, y, r, hue, alpha, pulse) {
-  const pr = r * (1 + pulse*0.06);
-  for (let i=0;i<5;i++) {
-    const a=(i/5)*Math.PI*2;
-    ctx.beginPath();
-    ctx.ellipse(x+Math.cos(a)*pr*1.1, y+Math.sin(a)*pr*1.1,
-                pr*0.85, pr*0.45, a, 0, Math.PI*2);
-    ctx.fillStyle=`hsla(${hue},70%,82%,${0.88*alpha})`;
-    ctx.fill();
-  }
-  ctx.beginPath(); ctx.arc(x,y,pr*0.42,0,Math.PI*2);
-  ctx.fillStyle=`hsla(${hue+10},85%,62%,${0.95*alpha})`; ctx.fill();
-}
+// ── Animate ──
+const clock = new THREE.Clock();
+let elapsed = 0;
 
-function drawFruit(x, y, r, hue, alpha, sway) {
-  const sx = x + sway;
-  // stem
-  ctx.beginPath(); ctx.moveTo(sx,y-r); ctx.lineTo(sx,y-r-6);
-  ctx.strokeStyle=`rgba(60,100,30,${alpha*0.7})`; ctx.lineWidth=1; ctx.stroke();
-  // body
-  const g = ctx.createRadialGradient(sx-r*0.3,y-r*0.3,r*0.1,sx,y,r);
-  g.addColorStop(0,`hsla(${hue},90%,72%,${alpha})`);
-  g.addColorStop(1,`hsla(${hue+10},80%,40%,${alpha})`);
-  ctx.beginPath(); ctx.arc(sx,y,r,0,Math.PI*2);
-  ctx.fillStyle=g; ctx.fill();
-  // shine
-  ctx.beginPath(); ctx.ellipse(sx-r*0.28,y-r*0.28,r*0.25,r*0.15,-0.4,0,Math.PI*2);
-  ctx.fillStyle=`rgba(255,255,255,${alpha*0.4})`; ctx.fill();
-}
+renderer.setAnimationLoop(()=>{
+  const dt = clock.getDelta();
+  elapsed += dt;
+  const sp = dt * 0.7;
 
-// ── Main loop ──
-let frame=0;
-const SP = 0.012; // transition speed per frame
+  // State transitions
+  state.sprout    = lerp(state.sprout,   targetStage>=0?1:0, sp*2.0);
+  state.grow      = lerp(state.grow,     targetStage>=1?1:0, sp*0.65);
+  state.greenLeaf = lerp(state.greenLeaf,(targetStage===1||targetStage===3)?1:0, sp*0.5);
+  state.flower    = lerp(state.flower,   targetStage===2?1:0, sp*0.6);
+  state.fruit     = lerp(state.fruit,    targetStage===3?1:0, sp*0.5);
+  state.fall      = lerp(state.fall,     targetStage===4?1:0, sp*0.55);
 
-function loop() {
-  requestAnimationFrame(loop);
-  frame++;
-  const t = frame/60;
-
-  // Advance state
-  const tgt = targetStage;
-  const sp = SP;
-  state.sprout  = lerp(state.sprout,  tgt>=0?1:0, sp*2);
-  state.grow    = lerp(state.grow,    tgt>=1?1:0, sp*0.8);
-  state.flower  = lerp(state.flower,  (tgt===2||tgt===3)?1:0, sp*0.7);
-  state.fruit   = lerp(state.fruit,   tgt===3?1:0, sp*0.5);
-  state.fall    = lerp(state.fall,    tgt===4?1:0, sp*0.6);
-
-  // Clear
-  ctx.clearRect(0,0,W,H);
-
-  // Background gradient by stage
-  const bgColors = [
-    ['#0d1117','#0d1117'],
-    ['#0d1520','#0a1018'],
-    ['#150818','#0d0d18'],
-    ['#180c08','#100808'],
-    ['#080808','#050505'],
-  ];
-  const bc = bgColors[targetStage];
-  const bg = ctx.createLinearGradient(0,0,0,H);
-  bg.addColorStop(0, bc[0]); bg.addColorStop(1, bc[1]);
-  ctx.fillStyle=bg; ctx.fillRect(0,0,W,H);
-
-  // Stars (round)
-  if (frame === 1 || !window._stars) {
-    window._stars = Array.from({length:120}, ()=>(
-      { x:Math.random()*W, y:Math.random()*H*0.7,
-        r:0.5+Math.random()*1.2, a:0.3+Math.random()*0.5,
-        phase:Math.random()*Math.PI*2 }
-    ));
-  }
-  for (const s of window._stars) {
-    const sa = s.a * (0.7+Math.sin(t*1.2+s.phase)*0.3);
-    ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, Math.PI*2);
-    ctx.fillStyle=`rgba(255,240,200,${sa})`; ctx.fill();
-  }
-
-  // Ground glow
-  const gg = ctx.createRadialGradient(OX,OY,0,OX,OY,200);
-  gg.addColorStop(0,'rgba(40,60,30,0.35)');
-  gg.addColorStop(1,'rgba(0,0,0,0)');
-  ctx.fillStyle=gg; ctx.fillRect(0,0,W,H);
-
-  ctx.save();
-  ctx.translate(OX, OY);
-
-  // ── Sprout ──
-  if (state.sprout > 0.01) {
-    const sh = 40 * easeBack(Math.min(1,state.sprout*2));
-    const sa = Math.min(1, state.grow > 0.3 ? 1-(state.grow-0.3)/0.4 : 1);
-    ctx.save();
-    ctx.globalAlpha = sa;
-    // stem
-    ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(0,-sh);
-    ctx.strokeStyle='#6aaa30'; ctx.lineWidth=3; ctx.lineCap='round'; ctx.stroke();
-    // tiny leaves
-    if (state.sprout > 0.5) {
-      const la = easeOut((state.sprout-0.5)*2);
-      ctx.globalAlpha=sa*la;
-      ctx.beginPath(); ctx.ellipse(-8,-sh*0.7,10,5,-0.5,0,Math.PI*2);
-      ctx.fillStyle='#7ac435'; ctx.fill();
-      ctx.beginPath(); ctx.ellipse(8,-sh*0.65,10,5,0.5,0,Math.PI*2);
-      ctx.fillStyle='#88cc40'; ctx.fill();
+  // Sprout
+  const sproutFade = targetStage < 2 ? 1 : clamp(1-(state.grow-0.5)/0.3);
+  stemMesh.scale.y  = easeBack(clamp(state.sprout*1.8)) * sproutFade;
+  sproutGroup.children.forEach(c=>{
+    if (c.userData.isSproutLeaf) {
+      const s = easeBack(clamp((state.sprout-0.5)*2)) * sproutFade;
+      c.scale.setScalar(s);
     }
-    ctx.restore();
+  });
+
+  // Branches
+  const bReveal = easeIO(state.grow) * TOTAL;
+  for (const m of branchMeshes) {
+    const localT = clamp((bReveal - m.userData.order) / Math.max(1,TOTAL*0.05));
+    m.scale.y = easeIO(localT);
   }
 
-  // ── Branches ──
-  const growReveal = easeInOut(state.grow) * TOTAL;
-  if (state.grow > 0.01) {
-    for (let i=0;i<TOTAL;i++) {
-      const n = NODES[i];
-      const localT = clamp01((growReveal - i) / Math.max(1, TOTAL*0.04));
-      if (localT <= 0) continue;
-      const bAlpha = easeOut(localT);
-      // branch color darkens with depth
-      const lightness = Math.max(18, 40-n.depth*3);
-      ctx.beginPath();
-      ctx.moveTo(n.x1, n.y1); ctx.lineTo(n.x2, n.y2);
-      ctx.strokeStyle=`hsla(25,40%,${lightness}%,${bAlpha})`;
-      ctx.lineWidth=n.sw; ctx.lineCap='round'; ctx.stroke();
+  // Green leaves (生长 + 结果)
+  greenLeafParticles.material.opacity = easeOut(state.greenLeaf) * 0.88;
+
+  // Flowers
+  flowerParticles.material.opacity = easeOut(state.flower) * 0.92;
+  flowerParticles.material.size = 0.32 + Math.sin(elapsed*1.5)*0.02;
+
+  // Fruits
+  fruitParticles.material.opacity = easeOut(state.fruit) * 0.9;
+  fruitParticles.rotation.y += dt*0.05;
+
+  // Falling leaves
+  fallMat.opacity = easeOut(state.fall) * 0.88;
+  if (state.fall > 0.05) {
+    const posAttr = fallGeo.getAttribute('position');
+    for (let i=0;i<FALL_COUNT;i++) {
+      const v = fallVel[i];
+      posAttr.array[i*3]   += v.vx + Math.sin(elapsed*0.7+v.phase)*0.015;
+      posAttr.array[i*3+1] += v.vy * state.fall;
+      posAttr.array[i*3+2] += v.vz;
+      if (posAttr.array[i*3+1] < -0.3) resetLeaf(i);
     }
-    // green leaf dots on tips
-    if (state.grow > 0.6 && state.flower < 0.5) {
-      const leafAlpha = easeOut((state.grow-0.6)/0.4) * (1-state.flower*2);
-      for (const n of TIPS) {
-        ctx.beginPath(); ctx.arc(n.x2,n.y2, 3.5,0,Math.PI*2);
-        ctx.fillStyle=`rgba(100,180,60,${leafAlpha*0.6})`; ctx.fill();
-      }
-    }
+    posAttr.needsUpdate = true;
   }
 
-  // ── Flowers ──
-  if (state.flower > 0.01) {
-    for (let i=0;i<FLOWERS.length;i++) {
-      const f = FLOWERS[i];
-      const delay = i/FLOWERS.length * 0.6;
-      const localT = clamp01((state.flower - delay)/0.4);
-      if (localT <= 0) continue;
-      const alpha = easeOut(localT) * (1 - state.fall*0.8);
-      const pulse = Math.sin(t*1.8 + f.phase)*0.5+0.5;
-      drawFlower(f.x, f.y, f.r*easeBack(localT), f.hue, alpha, pulse);
-    }
-  }
+  // Camera gentle orbit
+  camera.position.x = Math.sin(elapsed*0.1)*2.5;
+  camera.position.z = 18 + Math.sin(elapsed*0.07)*1.5;
+  camera.position.y = 5  + Math.sin(elapsed*0.08)*0.5;
+  camera.lookAt(0, 5, 0);
 
-  // ── Fruits ──
-  if (state.fruit > 0.01) {
-    for (let i=0;i<FRUITS.length;i++) {
-      const f = FRUITS[i];
-      const delay = i/FRUITS.length * 0.5;
-      const localT = clamp01((state.fruit - delay)/0.5);
-      if (localT <= 0) continue;
-      const alpha = easeOut(localT) * (1-state.fall*0.7);
-      const sway = Math.sin(t*1.2+f.phase)*2*localT;
-      drawFruit(f.x, f.y, f.r*easeBack(localT), f.hue, alpha, sway);
-    }
-  }
+  // Sun drift
+  sunLight.position.x = 8+Math.sin(elapsed*0.05)*3;
+  sunLight.position.z = 10+Math.cos(elapsed*0.05)*3;
 
-  ctx.restore(); // un-translate
-
-  // ── Falling leaves ──
-  if (state.fall > 0.01) {
-    for (const l of LEAVES) {
-      l.x += l.vx * state.fall + Math.sin(t*0.8+l.phase)*0.5;
-      l.y += l.vy * state.fall;
-      l.rot += l.vrot * state.fall;
-      if (l.y > H+20) { l.y=-20-Math.random()*100; l.x=OX+(Math.random()-.5)*W*0.9; }
-      const alpha = Math.min(1, state.fall*1.5) * 0.8;
-      ctx.save();
-      ctx.translate(OX+l.x, OY+l.y);
-      ctx.rotate(l.rot);
-      ctx.beginPath();
-      ctx.ellipse(0,0,l.rx,l.ry,0,0,Math.PI*2);
-      ctx.fillStyle=`hsla(${l.hue},85%,52%,${alpha})`;
-      ctx.fill();
-      ctx.restore();
-    }
-  }
-}
-
-function clamp01(t){ return Math.max(0,Math.min(1,t)); }
-
-loop();
+  renderer.render(scene, camera);
+});
 </script>
 </body>
 </html>
