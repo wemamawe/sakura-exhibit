@@ -327,6 +327,7 @@ const flowerPts  = makeParticles(1400, peachFlowerTex, 0.55, allTipPos);
 const greenPts   = makeParticles(1200, greenLeafTex,   0.45, allTipPos);
 const peachPts   = makeParticles(220,  peachTex,       0.60, tipPositions);
 scene.add(flowerPts); scene.add(greenPts); scene.add(peachPts);
+flowerPts.visible=false; greenPts.visible=false; peachPts.visible=false;
 
 // ── Falling leaves ──
 const FALL=500;
@@ -347,6 +348,7 @@ const fallMat=new THREE.PointsMaterial({
   opacity:0, depthWrite:false, alphaTest:0.05,
 });
 const fallingLeaves=new THREE.Points(fallGeo,fallMat);
+fallingLeaves.visible = false;  // 默认隐藏，落叶阶段才显示
 scene.add(fallingLeaves);
 
 // ── Sprout ──
@@ -470,8 +472,10 @@ renderer.setAnimationLoop(()=>{
   }
 
   // ── Particles (green leaves sync with grow) ──
-  // during grow stage, greenLeaf opacity follows bReveal progress
   const leafSync = targetStage===1 ? easeOut(state.grow)*0.9 : easeOut(state.greenLeaf)*0.88;
+  greenPts.visible  = targetStage>=1;
+  flowerPts.visible = targetStage===2;
+  peachPts.visible  = targetStage===3;
   greenPts.material.opacity   = leafSync;
   // individual leaf particles: only show ones near already-grown branches
   // (approximate by making opacity proportional to grow)
@@ -480,7 +484,8 @@ renderer.setAnimationLoop(()=>{
   peachPts.material.opacity   = easeOut(state.fruit)*0.95;
   peachPts.material.size      = 0.58+Math.sin(elapsed*0.9)*0.025;
 
-  // ── Falling leaves ──
+  // ── Falling leaves — only visible at stage 4 ──
+  fallingLeaves.visible = targetStage===4 && state.fall>0.02;
   fallMat.opacity=easeOut(state.fall)*0.90;
   if(state.fall>0.05){
     const pa=fallGeo.getAttribute('position');
