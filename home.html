@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>花树展览馆</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100%;overflow:hidden;}
+body{
+  background:#0a0318;
+  font-family:'PingFang SC','Microsoft YaHei',sans-serif;
+  color:#fff;
+}
+canvas#bg{position:fixed;top:0;left:0;z-index:0;}
+
+.header{
+  position:fixed;top:0;left:0;right:0;z-index:10;
+  padding:32px 0 16px;
+  text-align:center;
+  background:linear-gradient(to bottom,rgba(10,3,24,0.9),transparent);
+}
+.header h1{
+  font-size:28px;letter-spacing:12px;font-weight:300;
+  background:linear-gradient(135deg,#ffd6e8,#e8b4ff,#b4d4ff);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  text-shadow:none;
+}
+.header p{
+  margin-top:8px;font-size:12px;letter-spacing:4px;
+  color:rgba(255,210,230,0.5);
+}
+
+.grid{
+  position:fixed;top:0;left:0;right:0;bottom:0;z-index:5;
+  display:flex;align-items:center;justify-content:center;
+  padding:100px 40px 60px;
+}
+.cards{
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:20px;
+  max-width:960px;
+  width:100%;
+}
+.card{
+  position:relative;overflow:hidden;
+  border-radius:16px;
+  border:1px solid rgba(255,255,255,0.12);
+  background:rgba(255,255,255,0.05);
+  backdrop-filter:blur(12px);
+  cursor:pointer;
+  transition:transform .3s, box-shadow .3s, border-color .3s;
+  text-decoration:none;color:inherit;
+  aspect-ratio:3/4;
+  display:flex;flex-direction:column;justify-content:flex-end;
+  padding:20px;
+}
+.card:hover{
+  transform:translateY(-6px) scale(1.02);
+  box-shadow:0 20px 60px rgba(0,0,0,0.5);
+}
+.card-bg{
+  position:absolute;top:0;left:0;right:0;bottom:0;
+  background-size:cover;background-position:center;
+  transition:transform .4s;
+  filter:brightness(0.7) saturate(1.2);
+}
+.card:hover .card-bg{transform:scale(1.06);}
+.card-content{position:relative;z-index:2;}
+.card-emoji{font-size:28px;margin-bottom:8px;display:block;}
+.card-title{font-size:17px;letter-spacing:3px;font-weight:400;margin-bottom:4px;}
+.card-sub{font-size:11px;letter-spacing:2px;color:rgba(255,255,255,0.6);}
+.card-tag{
+  display:inline-block;margin-top:8px;
+  padding:2px 10px;border-radius:20px;
+  font-size:10px;letter-spacing:1px;
+  background:rgba(255,255,255,0.15);
+  border:1px solid rgba(255,255,255,0.2);
+}
+
+/* gradient overlays per card */
+.card::after{
+  content:'';position:absolute;
+  bottom:0;left:0;right:0;height:65%;
+  background:linear-gradient(to top,rgba(0,0,0,0.75),transparent);
+  z-index:1;
+}
+
+/* individual card themes */
+.c-sakura3d { border-color:rgba(255,150,200,0.3); }
+.c-sakura3d:hover { box-shadow:0 20px 60px rgba(255,100,180,0.3); border-color:rgba(255,150,200,0.7); }
+.c-peach     { border-color:rgba(255,180,100,0.3); }
+.c-peach:hover { box-shadow:0 20px 60px rgba(255,160,80,0.3); border-color:rgba(255,180,100,0.7); }
+.c-ginkgo    { border-color:rgba(255,220,80,0.3); }
+.c-ginkgo:hover { box-shadow:0 20px 60px rgba(255,200,50,0.3); border-color:rgba(255,220,80,0.7); }
+.c-fractal   { border-color:rgba(120,200,255,0.3); }
+.c-fractal:hover { box-shadow:0 20px 60px rgba(80,180,255,0.25); border-color:rgba(120,200,255,0.7); }
+.c-heart     { border-color:rgba(255,150,200,0.3); }
+.c-heart:hover { box-shadow:0 20px 60px rgba(255,100,160,0.25); border-color:rgba(255,150,200,0.7); }
+.c-upward    { border-color:rgba(200,180,255,0.3); }
+.c-upward:hover { box-shadow:0 20px 60px rgba(180,150,255,0.25); border-color:rgba(200,180,255,0.7); }
+
+.footer{
+  position:fixed;bottom:16px;left:0;right:0;
+  text-align:center;z-index:10;
+  font-size:11px;letter-spacing:3px;
+  color:rgba(255,200,220,0.3);
+}
+</style>
+</head>
+<body>
+<canvas id="bg"></canvas>
+
+<div class="header">
+  <h1>花 · 树 · 展 览 馆</h1>
+  <p>BLOSSOM GALLERY</p>
+</div>
+
+<div class="grid">
+  <div class="cards">
+
+    <a class="card c-sakura3d" href="sakura3d.html">
+      <div class="card-bg" style="background:linear-gradient(135deg,#1a0a3e,#5a1a7a,#c04090);"></div>
+      <div class="card-content">
+        <span class="card-emoji">🌸</span>
+        <div class="card-title">樱花物语</div>
+        <div class="card-sub">Sakura · 3D</div>
+        <span class="card-tag">花苞 盛开 花雨 新叶</span>
+      </div>
+    </a>
+
+    <a class="card c-peach" href="peach.html">
+      <div class="card-bg" style="background:linear-gradient(135deg,#1a0a08,#6a2010,#e06030);"></div>
+      <div class="card-content">
+        <span class="card-emoji">🍑</span>
+        <div class="card-title">桃树四季</div>
+        <div class="card-sub">Peach Tree · 3D</div>
+        <span class="card-tag">萌芽 生长 桃花 结果 落叶</span>
+      </div>
+    </a>
+
+    <a class="card c-ginkgo" href="ginkgo.html">
+      <div class="card-bg" style="background:linear-gradient(135deg,#0a0800,#3a2800,#c08000);"></div>
+      <div class="card-content">
+        <span class="card-emoji">🍂</span>
+        <div class="card-title">银杏秋色</div>
+        <div class="card-sub">Ginkgo · 3D</div>
+        <span class="card-tag">新绿 夏荫 金秋 落叶</span>
+      </div>
+    </a>
+
+    <a class="card c-fractal" href="fractal.html">
+      <div class="card-bg" style="background:linear-gradient(135deg,#020820,#081840,#104080);"></div>
+      <div class="card-content">
+        <span class="card-emoji">🌿</span>
+        <div class="card-title">分形生长</div>
+        <div class="card-sub">Fractal Tree · 2D</div>
+        <span class="card-tag">L-System 递归算法</span>
+      </div>
+    </a>
+
+    <a class="card c-heart" href="heart.html">
+      <div class="card-bg" style="background:linear-gradient(135deg,#200010,#600030,#d04070);"></div>
+      <div class="card-content">
+        <span class="card-emoji">❤️</span>
+        <div class="card-title">爱心樱花</div>
+        <div class="card-sub">Heart Blossom · 2D</div>
+        <span class="card-tag">博物馆系列</span>
+      </div>
+    </a>
+
+    <a class="card c-upward" href="upward.html">
+      <div class="card-bg" style="background:linear-gradient(135deg,#080018,#280848,#603080);"></div>
+      <div class="card-content">
+        <span class="card-emoji">🌸</span>
+        <div class="card-title">等枝桠成繁华</div>
+        <div class="card-sub">Upward View · 2D</div>
+        <span class="card-tag">仰视视角</span>
+      </div>
+    </a>
+
+  </div>
+</div>
+
+<div class="footer">拖拽 · 旋转 · 感受四季</div>
+
+<script>
+// Floating petal particle background
+const canvas = document.getElementById('bg');
+const ctx = canvas.getContext('2d');
+let W, H;
+function resize(){ W=canvas.width=innerWidth; H=canvas.height=innerHeight; }
+resize(); window.addEventListener('resize',resize);
+
+const petals = Array.from({length:60},()=>({
+  x: Math.random()*2000-500,
+  y: Math.random()*1500-200,
+  r: 1.5+Math.random()*3.5,
+  vx: -0.2-Math.random()*0.5,
+  vy: 0.15+Math.random()*0.35,
+  phase: Math.random()*Math.PI*2,
+  hue: 280+Math.random()*80,
+  alpha: 0.2+Math.random()*0.4,
+}));
+
+let t=0;
+function draw(){
+  ctx.clearRect(0,0,W,H);
+  t+=0.012;
+  // star field
+  ctx.save();
+  for(let i=0;i<120;i++){
+    const sx=(i*137.5%W), sy=(i*97.3%H);
+    const sa=0.2+Math.sin(t*0.8+i)*0.15;
+    ctx.beginPath();
+    ctx.arc(sx,sy,0.6+Math.sin(i)*0.4,0,Math.PI*2);
+    ctx.fillStyle=`rgba(255,220,255,${sa})`;
+    ctx.fill();
+  }
+  ctx.restore();
+
+  // petals
+  for(const p of petals){
+    p.x += p.vx + Math.sin(t*0.6+p.phase)*0.3;
+    p.y += p.vy + Math.cos(t*0.5+p.phase)*0.15;
+    if(p.y>H+20) p.y=-20;
+    if(p.x<-20) p.x=W+20;
+    ctx.save();
+    ctx.translate(p.x,p.y);
+    ctx.rotate(t*0.3+p.phase);
+    ctx.beginPath();
+    // simple heart petal
+    ctx.moveTo(0,0);
+    ctx.bezierCurveTo(-p.r,-p.r*0.5,-p.r*1.5,-p.r*2,-p.r*0.3,-p.r*2.5);
+    ctx.bezierCurveTo(p.r*0.3,-p.r*2.8,p.r*0.5,-p.r*1.5,0,0);
+    ctx.fillStyle=`hsla(${p.hue},70%,80%,${p.alpha})`;
+    ctx.fill();
+    ctx.restore();
+  }
+  requestAnimationFrame(draw);
+}
+draw();
+</script>
+</body>
+</html>

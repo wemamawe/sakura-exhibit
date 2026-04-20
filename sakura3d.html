@@ -33,6 +33,8 @@ canvas{display:block;}
 </style>
 </head>
 <body>
+<a id="home-btn" href="home.html" style="position:fixed;top:24px;left:24px;z-index:20;padding:6px 14px;border-radius:20px;background:rgba(255,255,255,0.1);border:1px solid rgba(255,200,220,0.3);color:rgba(255,220,235,0.8);font-size:12px;letter-spacing:2px;text-decoration:none;backdrop-filter:blur(8px);transition:all .2s;">← 展览馆</a>
+<button id="sound-btn" style="position:fixed;top:24px;right:24px;z-index:20;padding:6px 14px;border-radius:20px;background:rgba(255,255,255,0.1);border:1px solid rgba(255,200,220,0.3);color:rgba(255,220,235,0.8);font-size:12px;letter-spacing:1px;cursor:pointer;backdrop-filter:blur(8px);">🔇 音效</button>
 <div id="caption">花苞初绽</div>
 <div id="hint">拖拽旋转 · 滚轮缩放</div>
 <div id="ui">
@@ -675,6 +677,61 @@ renderer.setAnimationLoop(()=>{
   sun.position.z=14+Math.cos(elapsed*0.035)*5;
 
   renderer.render(scene,camera);
+});
+// ── Audio: Wind + Piano via Web Audio API ──
+let audioCtx=null, windGain=null, isPlaying=false;
+
+function startAudio(){
+  if(audioCtx) return;
+  audioCtx=new (window.AudioContext||window.webkitAudioContext)();
+
+  // Wind: filtered noise
+  const bufSize=audioCtx.sampleRate*2;
+  const buf=audioCtx.createBuffer(1,bufSize,audioCtx.sampleRate);
+  const data=buf.getChannelData(0);
+  for(let i=0;i<bufSize;i++) data[i]=(Math.random()*2-1);
+  const windSrc=audioCtx.createBufferSource();
+  windSrc.buffer=buf;windSrc.loop=true;
+  const bandpass=audioCtx.createBiquadFilter();
+  bandpass.type='bandpass';bandpass.frequency.value=400;bandpass.Q.value=0.8;
+  const lowpass=audioCtx.createBiquadFilter();
+  lowpass.type='lowpass';lowpass.frequency.value=900;
+  windGain=audioCtx.createGain();windGain.gain.value=0.12;
+  windSrc.connect(bandpass);bandpass.connect(lowpass);lowpass.connect(windGain);windGain.connect(audioCtx.destination);
+  windSrc.start();
+
+  // Piano notes: pentatonic loop (C D E G A)
+  const notes=[261.63,293.66,329.63,392,440,523.25,587.33,659.25];
+  const melody=[0,2,4,5,4,2,0,1,3,4,3,1,5,4,2,0];
+  let noteIdx=0;
+  function playNote(){
+    if(!isPlaying||!audioCtx) return;
+    const freq=notes[melody[noteIdx%melody.length]];
+    noteIdx++;
+    const osc=audioCtx.createOscillator();
+    const env=audioCtx.createGain();
+    osc.type='triangle';
+    osc.frequency.value=freq;
+    env.gain.setValueAtTime(0,audioCtx.currentTime);
+    env.gain.linearRampToValueAtTime(0.06,audioCtx.currentTime+0.02);
+    env.gain.exponentialRampToValueAtTime(0.001,audioCtx.currentTime+2.5);
+    osc.connect(env);env.connect(audioCtx.destination);
+    osc.start();osc.stop(audioCtx.currentTime+2.8);
+    setTimeout(playNote,1200+Math.random()*1800);
+  }
+  setTimeout(playNote,500);
+  isPlaying=true;
+}
+
+document.getElementById('sound-btn').addEventListener('click',()=>{
+  if(!audioCtx){
+    startAudio();
+    document.getElementById('sound-btn').textContent='🔊 音效';
+  } else {
+    isPlaying=!isPlaying;
+    if(windGain) windGain.gain.value=isPlaying?.12:0;
+    document.getElementById('sound-btn').textContent=isPlaying?'🔊 音效':'🔇 音效';
+  }
 });
 </script>
 </body>
