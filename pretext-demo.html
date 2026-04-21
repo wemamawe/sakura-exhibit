@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Animating text like cherry blossoms — Pretext + Canvas 2D</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    background: #0d0a14;
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    color: #f0e8f8;
+    min-height: 100vh;
+  }
+
+  /* ── Header ── */
+  header {
+    text-align: center;
+    padding: 48px 24px 32px;
+  }
+  header .eyebrow {
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: #c084fc;
+    margin-bottom: 10px;
+  }
+  header h1 {
+    font-size: clamp(22px, 4vw, 34px);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.15;
+  }
+  header p {
+    margin-top: 12px;
+    font-size: 14px;
+    color: rgba(240,232,248,0.55);
+    max-width: 52ch;
+    margin-inline: auto;
+    line-height: 1.6;
+  }
+
+  /* ── Demo grid ── */
+  .demos {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 32px;
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 0 24px 64px;
+  }
+
+  .demo-card {
+    border: 1px solid rgba(192,132,252,0.18);
+    border-radius: 20px;
+    background: rgba(255,255,255,0.03);
+    overflow: hidden;
+  }
+  .demo-card canvas {
+    display: block;
+    width: 100%;
+    height: auto;
+  }
+  .demo-card .caption {
+    padding: 18px 20px;
+    border-top: 1px solid rgba(192,132,252,0.12);
+  }
+  .demo-card .caption h2 {
+    font-size: 15px;
+    font-weight: 600;
+    margin-bottom: 6px;
+  }
+  .demo-card .caption p {
+    font-size: 13px;
+    color: rgba(240,232,248,0.5);
+    line-height: 1.55;
+  }
+  .demo-card .caption code {
+    font-family: "SF Mono", ui-monospace, monospace;
+    font-size: 11px;
+    background: rgba(192,132,252,0.12);
+    color: #c084fc;
+    padding: 1px 5px;
+    border-radius: 4px;
+  }
+
+  /* ── Footer ── */
+  footer {
+    text-align: center;
+    padding: 0 24px 48px;
+    font-size: 12px;
+    color: rgba(240,232,248,0.3);
+    line-height: 1.8;
+  }
+  footer a { color: #c084fc; text-decoration: none; }
+  footer a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+
+<header>
+  <p class="eyebrow">Pretext + Canvas 2D</p>
+  <h1>Animating text like cherry blossoms</h1>
+  <p>
+    Each line of text is a petal. It drifts, sways, and settles — landing exactly
+    where Pretext calculated it should, with no DOM reads in the animation loop.
+  </p>
+</header>
+
+<div class="demos">
+
+  <!-- Demo A: Poem lines fall like petals -->
+  <div class="demo-card">
+    <canvas id="cPoem" width="480" height="540"></canvas>
+    <div class="caption">
+      <h2>Poem lines as falling petals</h2>
+      <p>
+        <code>prepareWithSegments</code> + <code>layoutWithLines</code> compute
+        each line's exact target position once. The animation loop uses only those
+        cached coordinates — zero DOM reads, zero reflow.
+      </p>
+    </div>
+  </div>
+
+  <!-- Demo B: Museum label card drifts down -->
+  <div class="demo-card">
+    <canvas id="cLabel" width="480" height="540"></canvas>
+    <div class="caption">
+      <h2>Museum label with exact card height</h2>
+      <p>
+        Pretext measures the body text at a fixed column width and returns the
+        precise line count. The card border is drawn from that number — it always
+        fits the text, at any font size or locale.
+      </p>
+    </div>
+  </div>
+
+</div>
+
+<footer>
+  Built with <a href="https://github.com/chenglou/pretext" target="_blank">@chenglou/pretext</a>
+  &amp; native Canvas 2D &nbsp;·&nbsp;
+  No external dependencies beyond Pretext &nbsp;·&nbsp;
+  <a href="https://wemamawe.github.io/sakura-exhibit/home.html" target="_blank">Full exhibit →</a>
+</footer>
+
+<script type="module">
+// ─────────────────────────────────────────────
+//  Load Pretext from esm.sh, then boot both demos
+// ─────────────────────────────────────────────
+import * as Pretext from 'https://esm.sh/@chenglou/pretext';
+const { prepareWithSegments, layoutWithLines } = Pretext;
+
+// ══════════════════════════════════════════════
+//  DEMO A — Poem lines fall like cherry petals
+// ══════════════════════════════════════════════
+(function poemDemo() {
+  const canvas = document.getElementById('cPoem');
+  const ctx    = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+
+  // ── Cherry tree (upward view) ──
+  const branches = [];
+  let totalB = 0;
+
+  function buildTree(x, y, len, angle, depth, sw) {
+    if (depth > 9 || len < 5) return;
+    const x2 = x + Math.cos(angle) * len;
+    const y2 = y + Math.sin(angle) * len;
+    branches.push({ x1:x, y1:y, x2, y2, depth, sw, id: totalB++ });
+    const nl = len * (0.68 + Math.random() * 0.1);
+    const sp = 0.38 + Math.random() * 0.1;
+    buildTree(x2, y2, nl, angle - sp*(0.8+Math.random()*0.4), depth+1, sw*0.75);
+    buildTree(x2, y2, nl, angle + sp*(0.7+Math.random()*0.4), depth+1, sw*0.75);
+    if (depth < 4 && Math.random() < 0.3)
+      buildTree(x2, y2, nl*0.7, angle + (Math.random()-0.5)*0.6, depth+2, sw*0.6);
+  }
+  buildTree(W*0.2,  -8, 110, Math.PI/2 + 0.3,  0, 4.5);
+  buildTree(W*0.55, -8, 105, Math.PI/2 - 0.1,  0, 4.5);
+  buildTree(W*0.84, -8,  80, Math.PI/2 - 0.35, 0, 3.5);
+
+  const flowers = [];
+  for (const b of branches) {
+    if (b.depth >= 5 && Math.random() < 0.6) {
+      for (let k = 0; k < 2 + Math.floor(Math.random()*3); k++) {
+        const t = Math.random();
+        flowers.push({
+          x: b.x1+(b.x2-b.x1)*t + (Math.random()-0.5)*8,
+          y: b.y1+(b.y2-b.y1)*t + (Math.random()-0.5)*8,
+          r: 3.5+Math.random()*3, hue:340+Math.floor(Math.random()*15),
+          sat:60+Math.floor(Math.random()*20), lid:b.id, petals:5,
+        });
+      }
+    }
+  }
+
+  const floatingPetals = Array.from({length:18}, () => ({
+    x:Math.random()*W, y:Math.random()*H*0.7,
+    vx:(Math.random()-0.5)*0.5, vy:0.4+Math.random()*0.6,
+    rot:Math.random()*Math.PI*2, vrot:(Math.random()-0.5)*0.04,
+    rx:3+Math.random()*2, ry:1.5+Math.random()*0.8,
+    alpha:0.35+Math.random()*0.4, delay:Math.random()*200,
+  }));
+
+  function drawFlower(f, a) {
+    ctx.save(); ctx.translate(f.x, f.y);
+    for (let i = 0; i < f.petals; i++) {
+      const ang = (i/f.petals)*Math.PI*2;
+      ctx.beginPath();
+      ctx.ellipse(Math.cos(ang)*f.r*1.1, Math.sin(ang)*f.r*1.1, f.r*0.8, f.r*0.45, ang, 0, Math.PI*2);
+      ctx.fillStyle = `hsla(${f.hue},${f.sat}%,88%,${0.9*a})`; ctx.fill();
+    }
+    ctx.beginPath(); ctx.arc(0,0,f.r*0.4,0,Math.PI*2);
+    ctx.fillStyle = `hsla(${f.hue+5},85%,65%,${0.95*a})`; ctx.fill();
+    ctx.restore();
+  }
+
+  // ── Pretext: measure poem layout once ──
+  // "Tao Te Jing of the peach blossom" — Classic of Songs, 周南·桃夭
+  const POEM  = '桃之夭夭，灼灼其华。\n之子于归，宜其室家。\n桃之夭夭，有蕡其实。\n之子于归，宜其家室。';
+  const FONT  = '19px "PingFang SC","Hiragino Sans GB","Microsoft YaHei",serif';
+  const LH    = 32;
+  const MAX_W = 170;
+
+  // prepare() does the expensive work once: segment, measure, cache
+  const prepared = prepareWithSegments(POEM, FONT, { whiteSpace: 'pre-wrap' });
+  // layoutWithLines() is pure arithmetic over those cached widths
+  const { lines: poemLines } = layoutWithLines(prepared, MAX_W, LH);
+
+  // Build per-line physics state using Pretext's target coordinates
+  const totalPoemH = poemLines.length * LH;
+  const anchorX    = W - 24;
+  const anchorYTop = H - 52 - totalPoemH;
+
+  const lineParticles = poemLines.map((line, i) => ({
+    text:   line.text,
+    tx:     anchorX,                                    // ← Pretext-calculated X
+    ty:     anchorYTop + i * LH + LH * 0.78,           // ← Pretext-calculated Y
+    x:      anchorX + (Math.random()-0.5) * 130,
+    y:      -24 - i * 20,
+    rot:    (Math.random()-0.5) * 0.5,
+    vx:     (Math.random()-0.5) * 1.1,
+    vy:     1.6 + Math.random() * 1.2,
+    vrot:   (Math.random()-0.5) * 0.03,
+    phase:  Math.random() * Math.PI * 2,
+    landed: false,
+    landAt: -1,
+    alpha:  0,
+  }));
+
+  function spring(cur, tgt, vel, k, d) {
+    return { pos: cur+vel, vel: vel + (tgt-cur)*k - vel*d };
+  }
+
+  function ease(t) { return t<.5 ? 2*t*t : -1+(4-2*t)*t; }
+
+  let frame = 0;
+  const GROW = 160;
+
+  function tick() {
+    requestAnimationFrame(tick);
+    frame++;
+
+    // Sky gradient
+    const g = ctx.createLinearGradient(0,0,0,H);
+    g.addColorStop(0,'#5a9fc0'); g.addColorStop(0.5,'#82c2dc');
+    g.addColorStop(1,'#c4e8f6'); ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+
+    const progress  = Math.min(1, frame/GROW);
+    const revealIdx = Math.floor(ease(progress)*totalB);
+
+    // Draw branches
+    for (const b of branches) {
+      if (b.id > revealIdx) continue;
+      const a = Math.min(1,(revealIdx-b.id)/Math.max(1,totalB*0.04));
+      ctx.beginPath(); ctx.moveTo(b.x1,b.y1); ctx.lineTo(b.x2,b.y2);
+      ctx.strokeStyle=`rgba(35,28,22,${a})`; ctx.lineWidth=Math.max(0.5,b.sw);
+      ctx.lineCap='round'; ctx.stroke();
+    }
+
+    // Draw flowers
+    for (const f of flowers) {
+      if (f.lid > revealIdx-5) continue;
+      const a = Math.min(1,(revealIdx-f.lid-5)/Math.max(1,totalB*0.05));
+      drawFlower(f, a);
+    }
+
+    // Floating petals
+    if (frame > 110) {
+      for (const p of floatingPetals) {
+        if (frame < p.delay+110) continue;
+        p.x += p.vx + Math.sin(frame*0.018+p.delay)*0.45; p.y += p.vy;
+        p.rot += p.vrot;
+        if (p.y > H+12) { p.y=-10; p.x=Math.random()*W; }
+        ctx.save(); ctx.translate(p.x,p.y); ctx.rotate(p.rot);
+        ctx.beginPath(); ctx.ellipse(0,0,p.rx,p.ry,0,0,Math.PI*2);
+        ctx.fillStyle=`hsla(345,72%,82%,${p.alpha})`; ctx.fill(); ctx.restore();
+      }
+    }
+
+    // ── Poem petal-fall (Pretext drives the landing coordinates) ──
+    if (frame > 140) {
+      const t = frame - 140;
+      lineParticles.forEach((p, i) => {
+        const lt = t - i*18;
+        if (lt <= 0) return;
+        p.alpha = Math.min(1, lt/18);
+
+        if (!p.landed) {
+          const sway = Math.sin(lt*0.06+p.phase)*0.48;
+          const dist  = Math.hypot(p.tx-p.x, p.ty-p.y);
+
+          if (dist < 64 || p.y > p.ty) {
+            const sx = spring(p.x,p.tx,p.vx,0.12,0.55);
+            const sy = spring(p.y,p.ty,p.vy,0.14,0.58);
+            p.x=sx.pos; p.vx=sx.vel; p.y=sy.pos; p.vy=sy.vel; p.vrot*=0.82;
+            if (dist < 1.5) { p.x=p.tx; p.y=p.ty; p.landed=true; p.landAt=frame; }
+          } else {
+            p.x += p.vx+sway; p.y += p.vy; p.rot += p.vrot;
+          }
+        } else {
+          p.rot *= 0.88;
+        }
+
+        // Draw this line
+        ctx.save();
+        ctx.globalAlpha = p.alpha;
+        ctx.translate(p.x, p.y);
+        ctx.rotate(p.rot);
+        ctx.font = FONT;
+        ctx.textAlign = 'right';
+        ctx.strokeStyle = 'rgba(255,255,255,0.65)'; ctx.lineWidth = 3;
+        ctx.strokeText(p.text, 0, 0);
+        ctx.fillStyle = 'rgba(45,28,24,0.92)';
+        ctx.fillText(p.text, 0, 0);
+        ctx.restore();
+      });
+    }
+  }
+
+  tick();
+})();
+
+
+// ══════════════════════════════════════════════
+//  DEMO B — Museum label with Pretext-exact height
+// ══════════════════════════════════════════════
+(function labelDemo() {
+  const canvas = document.getElementById('cLabel');
+  const ctx    = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+
+  // ── Heart-shaped cherry tree ──
+  const BRANCHES = [
+    [240,415, 240,335, 4],
+    [240,365, 208,338, 2.4],[208,338, 172,316, 2.2],[172,316, 142,286, 2.0],
+    [142,286, 122,256, 1.8],[122,256, 116,226, 1.6],[116,226, 132,202, 1.4],
+    [132,202, 162,190, 1.2],[162,190, 192,186, 1.0],
+    [240,365, 272,338, 2.4],[272,338, 308,316, 2.2],[308,316, 338,286, 2.0],
+    [338,286, 358,256, 1.8],[358,256, 364,226, 1.6],[364,226, 348,202, 1.4],
+    [348,202, 318,190, 1.2],[318,190, 288,186, 1.0],
+    [240,335, 224,300, 1.7],[240,335, 256,300, 1.7],
+    [240,335, 232,365, 1.5],[232,365, 240,392, 1.1],
+    [240,335, 248,365, 1.5],[248,365, 240,392, 1.1],
+  ];
+
+  const FLOWERS = [
+    [195,182,6.5,344],[172,188,6,342],[158,198,5.5,345],
+    [288,182,6.5,344],[308,188,6,346],[322,198,5.5,342],
+    [104,222,6,343],[114,242,5.5,347],[126,260,5,344],
+    [376,222,6,343],[366,242,5.5,345],[354,260,5,342],
+    [218,276,5,344],[262,276,5,346],[240,272,5.5,343],
+    [240,395,5,343],[234,382,4,346],[246,382,4,342],
+  ];
+
+  function drawFlower(cx,cy,r,hue,a) {
+    for (let i=0;i<5;i++) {
+      const ang=(i/5)*Math.PI*2;
+      ctx.beginPath();
+      ctx.ellipse(cx+Math.cos(ang)*r*1.1,cy+Math.sin(ang)*r*1.1,r*0.85,r*0.48,ang,0,Math.PI*2);
+      ctx.fillStyle=`hsla(${hue},68%,83%,${0.88*a})`; ctx.fill();
+    }
+    ctx.beginPath(); ctx.arc(cx,cy,r*0.45,0,Math.PI*2);
+    ctx.fillStyle=`hsla(${hue+8},82%,62%,${0.95*a})`; ctx.fill();
+  }
+
+  const floatingPetals = Array.from({length:6},(_,i)=>({
+    x:185+i*18, y:280+(i%3)*12,
+    vx:(i%2===0?-1:1)*(0.3+Math.random()*0.35), vy:0.5+Math.random()*0.5,
+    rot:Math.random()*Math.PI*2, vrot:(Math.random()-0.5)*0.04,
+    rx:4, ry:2.2, delay:155+i*20,
+  }));
+
+  // ── Pretext: measure label layout once ──
+  const LABEL_W   = 210;
+  const LABEL_PAD = 15;
+  const LH        = 19;
+
+  // Sections with their fonts — Pretext handles line-breaking for each
+  const sections = [
+    { text:'Cherry Blossom Viewing Canopy',
+      font:'bold 14px "Palatino Linotype","Book Antiqua",Palatino,serif',
+      color:'#3a3228', gap:4 },
+    { text:'Prunus serrulata · Rosaceae',
+      font:'italic 12px "Palatino Linotype","Book Antiqua",Palatino,serif',
+      color:'#8a7a6a', gap:10 },
+    { text:'Installed 2024. This specimen blooms for approximately two weeks each spring. Please admire from a safe distance to protect the root system.',
+      font:'13px "Palatino Linotype","Book Antiqua",Palatino,serif',
+      color:'#5a5048', gap:12 },
+    { text:'Please do not approach.',
+      font:'italic 13px "Palatino Linotype","Book Antiqua",Palatino,serif',
+      color:'#c03055', gap:0 },
+  ].map(s => ({
+    ...s,
+    // layoutWithLines returns the exact lines for this column width
+    lines: layoutWithLines(prepareWithSegments(s.text, s.font), LABEL_W, LH).lines,
+  }));
+
+  // Pretext told us exactly how many lines each section has →
+  // now compute the card's pixel-perfect height
+  let cardH = LABEL_PAD * 2;
+  sections.forEach((s,i) => {
+    cardH += s.lines.length * LH;
+    if (i < sections.length-1) cardH += s.gap;
+  });
+
+  const cardW  = LABEL_W + LABEL_PAD*2;
+  const cardX  = (W - cardW) / 2;
+  const targetY = H - 28 - cardH;
+
+  // Fall physics state
+  const fall = {
+    y: -cardH - 20, vy: 2.0, rot: (Math.random()-0.5)*0.1,
+    vrot: (Math.random()-0.5)*0.005, phase: Math.random()*Math.PI*2,
+    landed: false, alpha: 0,
+  };
+
+  function springVal(cur,tgt,vel,k,d) {
+    return { pos:cur+vel, vel:vel+(tgt-cur)*k-vel*d };
+  }
+  function easeOut(t) { return 1-Math.pow(1-t,2); }
+  function easeBack(t) {
+    const c=1.70158+1;
+    return 1+c*Math.pow(t-1,3)+(c-1)*Math.pow(t-1,2);
+  }
+
+  const FENCE_START = 120, TEXT_START = 145;
+  let frame = 0;
+
+  function tick() {
+    requestAnimationFrame(tick);
+    frame++;
+
+    ctx.fillStyle='#faf9f7'; ctx.fillRect(0,0,W,H);
+
+    // Base ellipse
+    const baseA = Math.min(1,frame/20);
+    ctx.beginPath(); ctx.ellipse(240,420,28,8,0,0,Math.PI*2);
+    ctx.strokeStyle=`rgba(185,185,185,${baseA})`; ctx.lineWidth=1.2; ctx.stroke();
+
+    // Branches
+    const bRev = Math.min(1,frame/90)*BRANCHES.length;
+    BRANCHES.forEach((b,i) => {
+      if (i>bRev) return;
+      const a = Math.min(1,bRev-i);
+      ctx.beginPath(); ctx.moveTo(b[0],b[1]); ctx.lineTo(b[2],b[3]);
+      ctx.strokeStyle=`rgba(38,30,24,${easeOut(a)})`; ctx.lineWidth=b[4]; ctx.lineCap='round'; ctx.stroke();
+    });
+
+    // Flowers
+    if (frame>35) {
+      const ft=frame-35;
+      FLOWERS.forEach(([cx,cy,r,hue],i) => {
+        const t=Math.min(1,Math.max(0,(ft-i*1.6)/18));
+        if (t>0) drawFlower(cx,cy,r*easeBack(t),hue,Math.min(1,t*3));
+      });
+    }
+
+    // Fence
+    if (frame>FENCE_START) {
+      const ft=frame-FENCE_START;
+      [[112,368],[158,372],[322,372],[368,368]].forEach(([px,py],i) => {
+        const t=Math.min(1,Math.max(0,(ft-i*5)/15));
+        if (t<=0) return;
+        const dy=(1-t)*12;
+        ctx.save(); ctx.globalAlpha=easeOut(t);
+        ctx.beginPath(); ctx.moveTo(px,py+dy); ctx.lineTo(px,py+40+dy);
+        ctx.strokeStyle='#aaa'; ctx.lineWidth=1.5; ctx.lineCap='round'; ctx.stroke();
+        ctx.beginPath(); ctx.arc(px,py+dy,2.6,0,Math.PI*2);
+        ctx.fillStyle='#aaa'; ctx.fill();
+        ctx.restore();
+      });
+      // Rope
+      const rt=Math.min(1,Math.max(0,(ft-22)/28));
+      if (rt>0) {
+        const pts=[[112,382],[158,396],[240,392],[322,388],[368,382]];
+        ctx.save(); ctx.strokeStyle=`rgba(192,48,80,${rt})`; ctx.lineWidth=1.3;
+        ctx.setLineDash([7,4]);
+        ctx.beginPath(); ctx.moveTo(pts[0][0],pts[0][1]);
+        for (let s=0;s<4;s++) {
+          const st=Math.min(1,rt*4-s); if (st<=0) break;
+          ctx.lineTo(pts[s][0]+(pts[s+1][0]-pts[s][0])*st, pts[s][1]+(pts[s+1][1]-pts[s][1])*st);
+        }
+        ctx.stroke(); ctx.setLineDash([]); ctx.restore();
+      }
+    }
+
+    // Floating petals
+    if (frame>155) {
+      for (const p of floatingPetals) {
+        if (frame<p.delay) continue;
+        p.x+=p.vx+Math.sin(frame*0.02+p.delay)*0.28; p.y+=p.vy; p.rot+=p.vrot;
+        if (p.y>H+10){p.y=-10; p.x=160+Math.random()*150;}
+        ctx.save(); ctx.translate(p.x,p.y); ctx.rotate(p.rot);
+        ctx.beginPath(); ctx.ellipse(0,0,p.rx,p.ry,0,0,Math.PI*2);
+        ctx.fillStyle='hsla(345,72%,80%,0.72)'; ctx.fill(); ctx.restore();
+      }
+    }
+
+    // ── Label card fall (Pretext computed cardH → exact border fit) ──
+    if (frame > TEXT_START) {
+      const t = frame - TEXT_START;
+      fall.alpha = Math.min(1, t/22);
+
+      if (!fall.landed) {
+        const sway = Math.sin(t*0.045+fall.phase)*0.35;
+        fall.rot += fall.vrot + sway*0.003;
+        const dist = targetY - fall.y;
+        if (Math.abs(dist) < 80) {
+          const sy = springVal(fall.y,targetY,fall.vy,0.10,0.52);
+          fall.y=sy.pos; fall.vy=sy.vel; fall.vrot*=0.80;
+          if (Math.abs(dist)<1.2) { fall.y=targetY; fall.vy=0; fall.landed=true; }
+        } else {
+          fall.y += fall.vy+sway; fall.vy = Math.min(fall.vy+0.08, 5);
+        }
+      } else {
+        fall.rot *= 0.88;
+      }
+
+      const cy = fall.y;
+      const cx = cardX + cardW/2;
+
+      ctx.save();
+      ctx.globalAlpha = fall.alpha;
+      ctx.translate(cx, cy + cardH/2);
+      ctx.rotate(fall.rot);
+      ctx.translate(-cx, -(cy + cardH/2));
+
+      // Card background
+      ctx.fillStyle='rgba(250,248,244,0.95)';
+      ctx.beginPath(); ctx.roundRect(cardX,cy,cardW,cardH,4); ctx.fill();
+      ctx.strokeStyle='rgba(180,170,155,0.55)'; ctx.lineWidth=1; ctx.stroke();
+      // Red accent bar
+      ctx.fillStyle='rgba(192,48,80,0.72)'; ctx.fillRect(cardX,cy,cardW,3);
+
+      // Text sections — Pretext lines render at exact positions
+      let curY = cy + LABEL_PAD + LH*0.82;
+      sections.forEach((s,i) => {
+        ctx.font=s.font; ctx.fillStyle=s.color; ctx.textAlign='left';
+        s.lines.forEach(line => {
+          ctx.fillText(line.text, cardX+LABEL_PAD, curY);
+          curY += LH;
+        });
+        if (i < sections.length-1) {
+          if (i===sections.length-2) {
+            // Divider above the warning note
+            ctx.strokeStyle='rgba(180,170,155,0.38)'; ctx.lineWidth=0.7;
+            ctx.beginPath();
+            ctx.moveTo(cardX+LABEL_PAD, curY+s.gap/2);
+            ctx.lineTo(cardX+cardW-LABEL_PAD, curY+s.gap/2);
+            ctx.stroke();
+          }
+          curY += s.gap;
+        }
+      });
+
+      ctx.restore();
+    }
+  }
+
+  tick();
+})();
+</script>
+</body>
+</html>
