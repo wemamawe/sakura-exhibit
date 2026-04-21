@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>烛火信笺 · 木兰花令</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    background: #0c0805;
+    display: flex; align-items: center; justify-content: center;
+    min-height: 100vh; overflow: hidden;
+  }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+const canvas = document.getElementById('c');
+const ctx    = canvas.getContext('2d');
+const W = 520, H = 700;
+canvas.width = W; canvas.height = H;
+
+// ══════════════════════════════════════
+//  诗词内容
+// ══════════════════════════════════════
+const POEM_LINES = [
+  '人生若只如初见，',
+  '何事秋风悲画扇。',
+  '等闲变却故人心，',
+  '却道故人心易变。',
+  '骊山语罢清宵半，',
+  '泪雨零铃终不怨。',
+  '何如薄幸锦衣郎，',
+  '比翼连枝当日愿。',
+];
+
+// ══════════════════════════════════════
+//  信纸参数
+// ══════════════════════════════════════
+const PX = 148, PY = 105;
+const PW = 224, PH = 340;
+const ML = 28, MT = 26, LINE_H = 30;
+const FONT = '14px "Songti SC","SimSun","STSong",serif';
+
+// 预计算字符坐标
+ctx.font = FONT;
+const charMap = [];
+POEM_LINES.forEach((line, row) => {
+  let cx = PX + ML;
+  const baseY = PY + MT + (row + 0.82) * LINE_H;
+  for (let col = 0; col < line.length; col++) {
+    const ch = line[col];
+    const cw = ctx.measureText(ch).width;
+    charMap.push({ ch, x: cx, y: baseY, row, col, cw });
+    cx += cw;
+  }
+});
+const TOTAL = charMap.length;
+
+// ══════════════════════════════════════
+//  蜡烛参数
+// ══════════════════════════════════════
+const CX = W / 2;       // 烛芯 x
+const CY = H - 80;      // 烛体顶部 y
+const CANDLE_W = 22;
+const CANDLE_H = 90;
+
+// 烛泪状态
+const tears = [];
+for (let i = 0; i < 4; i++) {
+  tears.push({
+    x: CX + (Math.random() - 0.5) * CANDLE_W * 0.6,
+    y: CY + Math.random() * 20,
+    vy: 0.15 + Math.random() * 0.1,
+    r:  2 + Math.random() * 1.5,
+    maxY: CY + 40 + Math.random() * 20,
+    alpha: 0.7 + Math.random() * 0.25,
+  });
+}
+
+// ══════════════════════════════════════
+//  动画状态
+// ══════════════════════════════════════
+let frame = 0;
+let textProgress = 0;     // 已显示字符数
+const TYPE_START = 60;    // 开始打字的帧
+const TYPE_SPEED = 3.2;   // 帧/字
+
+const easeOut = t => 1 - Math.pow(1-t, 2);
+
+// ══════════════════════════════════════
+//  绘制蜡烛
+// ══════════════════════════════════════
+function drawCandle(flickerX, flickerY) {
+  // 烛体
+  const cg = ctx.createLinearGradient(CX - CANDLE_W/2, 0, CX + CANDLE_W/2, 0);
+  cg.addColorStop(0,   '#c8c0b0');
+  cg.addColorStop(0.35,'#f0ece0');
+  cg.addColorStop(0.65,'#e8e4d8');
+  cg.addColorStop(1,   '#a09080');
+  ctx.fillStyle = cg;
+  ctx.fillRect(CX - CANDLE_W/2, CY, CANDLE_W, CANDLE_H);
+
+  // 烛顶（椭圆熔蜡坑）
+  ctx.beginPath();
+  ctx.ellipse(CX, CY, CANDLE_W/2, 5, 0, 0, Math.PI*2);
+  ctx.fillStyle = '#d8d0b8'; ctx.fill();
+
+  // 烛芯
+  ctx.beginPath();
+  ctx.moveTo(CX, CY);
+  ctx.lineTo(CX + flickerX * 0.3, CY - 10);
+  ctx.strokeStyle = '#2a1a0a'; ctx.lineWidth = 1.5; ctx.stroke();
+
+  // 烛泪
+  for (const t of tears) {
+    ctx.beginPath();
+    ctx.arc(t.x, t.y, t.r, 0, Math.PI*2);
+    ctx.fillStyle = `rgba(220,215,195,${t.alpha})`; ctx.fill();
+    // 流淌痕迹
+    ctx.beginPath();
+    ctx.moveTo(t.x, t.y - t.r);
+    ctx.lineTo(t.x, Math.min(t.y + 8, t.maxY));
+    ctx.strokeStyle = `rgba(215,208,188,${t.alpha * 0.5})`;
+    ctx.lineWidth = t.r * 1.2; ctx.lineCap = 'round'; ctx.stroke();
+  }
+}
+
+// ══════════════════════════════════════
+//  绘制烛火
+// ══════════════════════════════════════
+function drawFlame(flickerX, flickerY) {
+  const fx = CX + flickerX;
+  const fy = CY + flickerY;
+
+  // 最外光晕（照亮整个画面）
+  const glow = ctx.createRadialGradient(fx, fy, 8, fx, fy, 220);
+  glow.addColorStop(0,   'rgba(255,175,60,0.22)');
+  glow.addColorStop(0.25,'rgba(255,140,40,0.10)');
+  glow.addColorStop(0.6, 'rgba(200,80,20,0.04)');
+  glow.addColorStop(1,   'rgba(150,50,10,0)');
+  ctx.fillStyle = glow;
+  ctx.fillRect(0, 0, W, H);
+
+  // 中光晕
+  const mg = ctx.createRadialGradient(fx, fy, 3, fx, fy, 55);
+  mg.addColorStop(0,   'rgba(255,220,120,0.55)');
+  mg.addColorStop(0.5, 'rgba(255,160,50,0.20)');
+  mg.addColorStop(1,   'rgba(200,80,20,0)');
+  ctx.fillStyle = mg;
+  ctx.beginPath(); ctx.arc(fx, fy, 55, 0, Math.PI*2); ctx.fill();
+
+  // 火焰外层（橙色）
+  ctx.save();
+  ctx.translate(fx, fy);
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  ctx.bezierCurveTo(-10, -18, -14, -34, 0, -48);
+  ctx.bezierCurveTo(14, -34, 10, -18, 0, 0);
+  ctx.fillStyle = 'rgba(220,90,20,0.75)'; ctx.fill();
+
+  // 火焰中层（橙黄）
+  ctx.beginPath();
+  ctx.moveTo(0, 2);
+  ctx.bezierCurveTo(-7, -14, -10, -28, 0, -40);
+  ctx.bezierCurveTo(10, -28, 7, -14, 0, 2);
+  ctx.fillStyle = 'rgba(255,170,40,0.88)'; ctx.fill();
+
+  // 火焰内核（亮黄白）
+  ctx.beginPath();
+  ctx.moveTo(0, 2);
+  ctx.bezierCurveTo(-4, -10, -5, -22, 0, -30);
+  ctx.bezierCurveTo(5, -22, 4, -10, 0, 2);
+  ctx.fillStyle = 'rgba(255,248,180,0.96)'; ctx.fill();
+
+  // 最亮核心
+  ctx.beginPath(); ctx.arc(0, -14, 4, 0, Math.PI*2);
+  ctx.fillStyle = 'rgba(255,255,230,0.9)'; ctx.fill();
+  ctx.restore();
+}
+
+// ══════════════════════════════════════
+//  绘制信纸
+// ══════════════════════════════════════
+function drawPaper(flickerX, flickerY) {
+  const fx = CX + flickerX, fy = CY + flickerY;
+
+  // 纸张阴影
+  ctx.save();
+  ctx.shadowColor = 'rgba(0,0,0,0.6)';
+  ctx.shadowBlur = 24; ctx.shadowOffsetX = 3; ctx.shadowOffsetY = 4;
+
+  // 纸张颜色受烛光影响（用 clip + radialGradient 叠加暖色）
+  ctx.fillStyle = '#f2ede0';
+  ctx.fillRect(PX, PY, PW, PH);
+  ctx.shadowColor = 'transparent';
+
+  // 烛光暖色叠加（让信纸靠近蜡烛的部分更亮）
+  const paperGlow = ctx.createRadialGradient(fx, fy, 0, fx, fy, 280);
+  paperGlow.addColorStop(0,   'rgba(255,180,60,0.18)');
+  paperGlow.addColorStop(0.4, 'rgba(255,140,40,0.08)');
+  paperGlow.addColorStop(1,   'rgba(0,0,0,0)');
+  ctx.fillStyle = paperGlow;
+  ctx.fillRect(PX, PY, PW, PH);
+
+  // 纸张四周暗角（营造暗室感）
+  const vignette = ctx.createRadialGradient(PX+PW/2, PY+PH/2, PH*0.2, PX+PW/2, PY+PH/2, PH*0.85);
+  vignette.addColorStop(0,   'rgba(0,0,0,0)');
+  vignette.addColorStop(1,   'rgba(0,0,0,0.35)');
+  ctx.fillStyle = vignette;
+  ctx.fillRect(PX, PY, PW, PH);
+
+  // 横线
+  const nLines = Math.floor((PH - MT - 14) / LINE_H);
+  for (let i = 0; i <= nLines; i++) {
+    const ly = PY + MT + i * LINE_H;
+    if (ly > PY + PH - 10) break;
+    ctx.beginPath(); ctx.moveTo(PX+6, ly); ctx.lineTo(PX+PW-6, ly);
+    ctx.strokeStyle = 'rgba(100,140,200,0.22)'; ctx.lineWidth = 0.7; ctx.stroke();
+  }
+  // 红线
+  ctx.beginPath();
+  ctx.moveTo(PX+ML-8, PY+10); ctx.lineTo(PX+ML-8, PY+PH-10);
+  ctx.strokeStyle = 'rgba(185,50,50,0.45)'; ctx.lineWidth = 1; ctx.stroke();
+  // 边框
+  ctx.strokeStyle = 'rgba(0,0,0,0.08)'; ctx.lineWidth = 1;
+  ctx.strokeRect(PX, PY, PW, PH);
+
+  ctx.restore();
+}
+
+// ══════════════════════════════════════
+//  绘制文字（带烛光颤动）
+// ══════════════════════════════════════
+function drawText(shown, flickerX, flickerY, flickerIntensity) {
+  ctx.font = FONT;
+  ctx.textBaseline = 'alphabetic';
+  ctx.textAlign = 'left';
+  const fx = CX + flickerX, fy = CY + flickerY;
+
+  for (let i = 0; i < Math.min(shown, TOTAL); i++) {
+    const cm = charMap[i];
+
+    // 每个字的微小抖动（随烛光颤动）
+    const jitter = flickerIntensity * 0.8;
+    const jx = (Math.sin(frame * 0.23 + i * 1.7) * jitter);
+    const jy = (Math.cos(frame * 0.19 + i * 2.1) * jitter);
+
+    // 字的亮度随距烛火距离变化
+    const dist = Math.hypot(cm.x - fx, cm.y - fy);
+    const lit  = Math.max(0.25, Math.min(1, 1 - dist / 280));
+    const bright = Math.floor(100 + lit * 130);
+    const warm   = Math.floor(lit * 30);   // 暖色偏移
+
+    ctx.save();
+    ctx.globalAlpha = 0.7 + lit * 0.3;
+    ctx.fillStyle = `rgb(${bright+warm},${bright},${Math.max(0,bright-warm*2)})`;
+    ctx.fillText(cm.ch, cm.x + jx, cm.y + jy);
+    ctx.restore();
+  }
+
+  // 标注
+  ctx.save();
+  ctx.font = '11px "Songti SC","SimSun",serif';
+  ctx.fillStyle = 'rgba(160,140,100,0.55)';
+  ctx.textAlign = 'center';
+  ctx.fillText('木兰花令 · 拟古决绝词', PX + PW/2, PY + PH + 18);
+  ctx.fillText('清 · 纳兰性德', PX + PW/2, PY + PH + 32);
+  ctx.restore();
+}
+
+// ══════════════════════════════════════
+//  主循环
+// ══════════════════════════════════════
+function tick() {
+  requestAnimationFrame(tick);
+  frame++;
+
+  // 烛火颤动（模拟微风）
+  const noise1 = Math.sin(frame * 0.13) * 2.2 + Math.sin(frame * 0.07) * 1.4;
+  const noise2 = Math.cos(frame * 0.17) * 1.0 + Math.sin(frame * 0.11) * 0.8;
+  const flickerX = noise1 + noise2;
+  const flickerY = Math.sin(frame * 0.09) * 1.2 - 2;
+  const flickerIntensity = 0.6 + Math.abs(Math.sin(frame * 0.08)) * 0.8;
+
+  // 全黑背景
+  ctx.fillStyle = '#0c0805'; ctx.fillRect(0, 0, W, H);
+
+  // 绘制顺序：烛光光晕 → 信纸 → 文字 → 烛体 → 烛火
+  drawFlame(flickerX, flickerY);  // 先画光晕（在最底层）
+  drawPaper(flickerX, flickerY);
+
+  // 打字机进度
+  if (frame > TYPE_START) {
+    textProgress = Math.min(TOTAL, Math.floor((frame - TYPE_START) / TYPE_SPEED));
+  }
+  drawText(textProgress, flickerX, flickerY, flickerIntensity);
+
+  drawCandle(flickerX, flickerY);
+  drawFlame(flickerX, flickerY);  // 再画一次火焰本体（在烛体之上）
+
+  // 更新烛泪
+  for (const t of tears) {
+    t.y += t.vy;
+    if (t.y >= t.maxY) {
+      t.y = CY + 5 + Math.random() * 10;
+      t.x = CX + (Math.random() - 0.5) * CANDLE_W * 0.5;
+    }
+  }
+}
+
+tick();
+</script>
+</body>
+</html>

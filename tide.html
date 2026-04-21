@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>潮汐 · 前赤壁赋</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    background: #0a0e1a;
+    display: flex; align-items: center; justify-content: center;
+    min-height: 100vh; overflow: hidden;
+  }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+const canvas = document.getElementById('c');
+const ctx    = canvas.getContext('2d');
+const W = 520, H = 680;
+canvas.width = W; canvas.height = H;
+
+// ── 诗句（分行） ──
+const POEM_LINES = [
+  '壬戌之秋，七月既望，',
+  '苏子与客泛舟，',
+  '游于赤壁之下。',
+  '清风徐来，水波不兴。',
+  '举酒属客，诵明月之诗，',
+  '歌窈窕之章。',
+];
+const FONT = '18px "Songti SC","SimSun","STSong",serif';
+const LINE_H = 36;
+
+// 预计算每个字符的基准坐标
+ctx.font = FONT;
+const chars = [];
+POEM_LINES.forEach((line, row) => {
+  const tw = ctx.measureText(line).width;
+  let cx = (W - tw) / 2;
+  const baseY = 300 + row * LINE_H;
+  for (let col = 0; col < line.length; col++) {
+    const ch = line[col];
+    const cw = ctx.measureText(ch).width;
+    chars.push({
+      ch, x: cx + cw * 0.5, baseY,
+      row, col,
+      phase: Math.random() * Math.PI * 2,  // 独立波浪相位
+      speed: 0.025 + Math.random() * 0.015,
+    });
+    cx += cw;
+  }
+});
+
+// ── 波浪参数 ──
+// 3层叠加正弦波
+const WAVES = [
+  { amp: 14, freq: 0.018, speed: 0.022, alpha: 0.85, color: '#1a3f6a' },
+  { amp: 9,  freq: 0.028, speed: 0.034, alpha: 0.65, color: '#1e4878' },
+  { amp: 6,  freq: 0.042, speed: 0.018, alpha: 0.45, color: '#224e82' },
+];
+
+// 涨退潮：波面基准线（120帧一周期）
+const TIDE_PERIOD = 240;
+const TIDE_CENTER = 340;   // 静止水面 y
+const TIDE_AMP    = 55;    // 涨退幅度
+
+let frame = 0;
+
+// ── 月亮 ──
+function drawMoon() {
+  const mx = W - 72, my = 72;
+  // 外光晕
+  const halo = ctx.createRadialGradient(mx, my, 18, mx, my, 72);
+  halo.addColorStop(0,   'rgba(255,245,200,0.18)');
+  halo.addColorStop(0.4, 'rgba(255,235,160,0.06)');
+  halo.addColorStop(1,   'rgba(255,235,160,0)');
+  ctx.fillStyle = halo;
+  ctx.beginPath(); ctx.arc(mx, my, 72, 0, Math.PI*2); ctx.fill();
+  // 月面
+  const mg = ctx.createRadialGradient(mx-5, my-5, 2, mx, my, 26);
+  mg.addColorStop(0,   '#fffde0');
+  mg.addColorStop(0.6, '#f5e88a');
+  mg.addColorStop(1,   '#d4c050');
+  ctx.beginPath(); ctx.arc(mx, my, 26, 0, Math.PI*2);
+  ctx.fillStyle = mg; ctx.fill();
+}
+
+// ── 月光倒影 ──
+function drawMoonReflection(waterY) {
+  const mx = W - 72;
+  const rg = ctx.createLinearGradient(mx, waterY, mx, H);
+  rg.addColorStop(0,   'rgba(245,235,150,0.22)');
+  rg.addColorStop(0.3, 'rgba(245,235,150,0.08)');
+  rg.addColorStop(1,   'rgba(245,235,150,0)');
+  ctx.fillStyle = rg;
+  ctx.beginPath();
+  ctx.moveTo(mx - 18, waterY);
+  ctx.lineTo(mx + 18, waterY);
+  ctx.lineTo(mx + 48, H);
+  ctx.lineTo(mx - 48, H);
+  ctx.closePath();
+  ctx.fill();
+}
+
+// ── 绘制波浪（填充海面） ──
+function drawWave(wave, tideY, t) {
+  ctx.beginPath();
+  ctx.moveTo(0, H);
+  for (let x = 0; x <= W; x += 2) {
+    const y = tideY
+      + Math.sin(x * wave.freq + t * wave.speed * 60) * wave.amp
+      + Math.sin(x * wave.freq * 1.7 + t * wave.speed * 60 * 0.6) * wave.amp * 0.4;
+    ctx.lineTo(x, y);
+  }
+  ctx.lineTo(W, H); ctx.lineTo(0, H); ctx.closePath();
+  ctx.fillStyle = wave.color;
+  ctx.globalAlpha = wave.alpha;
+  ctx.fill();
+  ctx.globalAlpha = 1;
+}
+
+// ── 波浪白色泡沫线 ──
+function drawFoam(wave, tideY, t) {
+  ctx.beginPath();
+  for (let x = 0; x <= W; x += 2) {
+    const y = tideY
+      + Math.sin(x * wave.freq + t * wave.speed * 60) * wave.amp
+      + Math.sin(x * wave.freq * 1.7 + t * wave.speed * 60 * 0.6) * wave.amp * 0.4;
+    x === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  }
+  ctx.strokeStyle = 'rgba(200,220,255,0.25)';
+  ctx.lineWidth = 1.2;
+  ctx.stroke();
+}
+
+// ── 文字绘制 ──
+function drawChars(tideY, t) {
+  ctx.font = FONT;
+  ctx.textBaseline = 'middle';
+  ctx.textAlign = 'center';
+
+  chars.forEach(c => {
+    // 每个字有独立的垂直波动
+    const floatY = c.baseY + Math.sin(t * c.speed * 60 + c.phase) * 7
+                           + Math.sin(t * c.col * 0.08 + c.row * 0.5) * 3;
+
+    // 水面线（用第一层波浪近似）
+    const waveAtX = tideY
+      + Math.sin(c.x * WAVES[0].freq + t * WAVES[0].speed * 60) * WAVES[0].amp;
+
+    // 字在水面以上的程度
+    const emerge = waveAtX - floatY;  // 正数=在水面上，负数=沉入水中
+    const emergeT = Math.max(0, Math.min(1, emerge / 30));  // 0~1
+
+    // 完全沉没则不画
+    if (emergeT <= 0.02) return;
+
+    // 透明度 & 颜色随浮出程度变化
+    const alpha  = 0.15 + emergeT * 0.82;
+    const bright = Math.floor(160 + emergeT * 60);
+
+    ctx.save();
+    ctx.globalAlpha = alpha;
+
+    // 月光反射：靠近反射柱的字略带金色
+    const distToReflect = Math.abs(c.x - (W - 72));
+    const reflectInflu  = Math.max(0, 1 - distToReflect / 120) * emergeT;
+    const r = Math.floor(bright + reflectInflu * 40);
+    const g = Math.floor(bright + reflectInflu * 20);
+    const b = Math.floor(bright - reflectInflu * 10);
+    ctx.fillStyle = `rgb(${r},${g},${b})`;
+
+    // 水中倒影（沉入水面以下的镜像）
+    if (emerge < 20) {
+      ctx.save();
+      ctx.globalAlpha = alpha * 0.3;
+      ctx.scale(1, -1);
+      ctx.fillText(c.ch, c.x, -floatY - (waveAtX - floatY) * 2);
+      ctx.restore();
+    }
+
+    ctx.fillText(c.ch, c.x, floatY);
+    ctx.restore();
+  });
+}
+
+// ── 标注 ──
+function drawLabel() {
+  ctx.save();
+  ctx.font = '11px "Songti SC","SimSun",serif';
+  ctx.fillStyle = 'rgba(160,175,200,0.45)';
+  ctx.textAlign = 'right';
+  ctx.textBaseline = 'top';
+  ctx.fillText('前赤壁赋 · 节选', W - 18, 18);
+  ctx.fillText('宋 · 苏轼', W - 18, 34);
+  ctx.restore();
+}
+
+// ── 天空背景 ──
+function drawSky() {
+  const sg = ctx.createLinearGradient(0, 0, 0, H * 0.55);
+  sg.addColorStop(0,   '#070b18');
+  sg.addColorStop(0.5, '#0e1828');
+  sg.addColorStop(1,   '#152135');
+  ctx.fillStyle = sg; ctx.fillRect(0, 0, W, H);
+}
+
+function easeInOut(t) { return t < 0.5 ? 2*t*t : -1+(4-2*t)*t; }
+
+function tick() {
+  requestAnimationFrame(tick);
+  frame++;
+  const t = frame / 60;  // 秒
+
+  // 涨退潮：波面基准 y 随时间缓慢升降
+  const tidePhase = (frame % TIDE_PERIOD) / TIDE_PERIOD;
+  const tideY = TIDE_CENTER + Math.sin(tidePhase * Math.PI * 2) * TIDE_AMP;
+
+  // 背景天空
+  drawSky();
+  drawMoon();
+  drawMoonReflection(tideY);
+
+  // 海面（从后到前三层波浪）
+  for (let i = WAVES.length - 1; i >= 0; i--) {
+    drawWave(WAVES[i], tideY + i * 6, t);
+  }
+  for (let i = 0; i < WAVES.length; i++) {
+    drawFoam(WAVES[i], tideY + i * 6, t);
+  }
+
+  // 文字
+  drawChars(tideY, t);
+
+  // 标注
+  drawLabel();
+}
+
+tick();
+</script>
+</body>
+</html>
