@@ -88,7 +88,7 @@ class Drop {
         const p = this.trail[i];
         ctx.beginPath();
         ctx.arc(p.x, p.y, p.r * (0.3 + t * 0.7), 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(100,170,220,${t * 0.18})`;
+        ctx.fillStyle = `rgba(40,110,180,${t * 0.20})`;
         ctx.fill();
       }
       ctx.restore();
@@ -110,11 +110,11 @@ class Drop {
     const gx = this.x - r * 0.25;
     const gy = this.y - r * 0.30;
     const grd = ctx.createRadialGradient(gx, gy, r * 0.04, this.x, this.y, r);
-    grd.addColorStop(0,    'rgba(255,255,255,0.90)');
-    grd.addColorStop(0.18, 'rgba(210,235,255,0.70)');
-    grd.addColorStop(0.55, 'rgba(100,170,220,0.45)');
-    grd.addColorStop(0.85, 'rgba(60,130,190,0.35)');
-    grd.addColorStop(1,    'rgba(40,100,160,0.20)');
+    grd.addColorStop(0,    'rgba(255,255,255,0.92)');
+    grd.addColorStop(0.18, 'rgba(190,225,250,0.75)');
+    grd.addColorStop(0.55, 'rgba(60,140,210,0.55)');
+    grd.addColorStop(0.85, 'rgba(28,90,155,0.45)');
+    grd.addColorStop(1,    'rgba(20,65,120,0.25)');
 
     ctx.beginPath();
     ctx.arc(this.x, this.y, r, 0, Math.PI * 2);
@@ -124,7 +124,7 @@ class Drop {
     // 边缘描边（极淡）
     ctx.beginPath();
     ctx.arc(this.x, this.y, r, 0, Math.PI * 2);
-    ctx.strokeStyle = 'rgba(80,150,210,0.22)';
+    ctx.strokeStyle = 'rgba(30,90,155,0.30)';
     ctx.lineWidth = 0.8;
     ctx.stroke();
 
@@ -222,7 +222,7 @@ function tick() {
     ctx.beginPath();
     ctx.moveTo(r.x, r.y);
     ctx.lineTo(r.x - 0.6, r.y + r.len);
-    ctx.strokeStyle = `rgba(100,160,210,${r.alpha})`;
+    ctx.strokeStyle = `rgba(50,120,185,${r.alpha})`;
     ctx.lineWidth = 0.6;
     ctx.stroke();
   }
@@ -236,7 +236,7 @@ function tick() {
     if (rp.alpha <= 0) { ripples.splice(i, 1); continue; }
     ctx.beginPath();
     ctx.ellipse(rp.x, rp.y, rp.r, rp.r * 0.35, 0, 0, Math.PI * 2);
-    ctx.strokeStyle = `rgba(90,155,210,${rp.alpha})`;
+    ctx.strokeStyle = `rgba(40,110,180,${rp.alpha})`;
     ctx.lineWidth = 0.8;
     ctx.stroke();
   }
