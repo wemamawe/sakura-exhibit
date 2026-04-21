@@ -342,7 +342,7 @@ function loop(){
   const script = document.createElement('script');
   script.type = 'module';
   script.textContent = `
-    import * as PT from 'https://cdn.jsdelivr.net/npm/@chenglou/pretext@latest/dist/index.js';
+    import * as PT from 'https://esm.sh/@chenglou/pretext';
     window.__Pretext__ = PT;
     window.dispatchEvent(new Event('pretext-ready'));
   `;
