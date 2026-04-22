@@ -12,17 +12,11 @@ canvas{display:block;position:fixed;top:0;left:0}
 </head>
 <body>
 <canvas id="c"></canvas>
-<script type="module">
+<script>
 // ══════════════════════════════════════════════════════════
-//  愿与愁 — 手写笔记本 + 游动的鱼 + Pretext文字排斥
-//  Phase 1: 工整信 + 气泡鱼游动
-//  Phase 2: 情感涂鸦 + 泪滴鱼
-//  Phase 3: 艺术笔记 + 有机形态 + 昆虫
-//  文字被鱼挤开 + 水波纹影响排版
+//  愿与愁 — 手写笔记本 + 游动的鱼 + 文字排斥 + 水波纹
+//  零外部依赖，自行实现逐字排版+物理
 // ══════════════════════════════════════════════════════════
-import * as Pretext from 'https://esm.sh/@chenglou/pretext';
-const { prepareWithSegments, layoutWithLines } = Pretext;
-
 const C = document.getElementById('c');
 const ctx = C.getContext('2d');
 let W, H, S;
@@ -32,6 +26,10 @@ function resize() {
   H = C.height = innerHeight;
   S = Math.min(W, H);
   rebuildLayout();
+  // 重置鱼位置
+  FISH[0].x = W * 0.3; FISH[0].y = H * 0.55;
+  FISH[1].x = W * 0.7; FISH[1].y = H * 0.5;
+  FISH[2].x = W * 0.5; FISH[2].y = H * 0.45;
 }
 
 // ── 时间 & 阶段 ──
@@ -40,60 +38,54 @@ const PHASE_DUR = 450, TRANS = 130;
 const TOTAL = (PHASE_DUR + TRANS) * 3;
 let cycleFrame = 0;
 
-// ── 信件文本 ──
+// ── 信件文本（用 \n 分行）──
 const TEXTS = [
   '亲爱的：\n\n今天又下雨了。\n窗外的梧桐叶被打得啪啪响，\n我坐在桌前，突然很想你。\n\n你说过，愿是一条鱼，\n可以在任何水域里自由游动。\n我想了很久，觉得愿更像是\n一颗投入湖心的石子——\n水花溅起的瞬间很美，\n但涟漪终会消散。\n\n你还好吗？',
   '我们说好不说再见的。\n\n可是每一封信，\n都像是一次小小的告别。\n你走了以后，\n我开始画一些奇怪的东西——\n圆圈，波浪，还有鱼。\n\n也许鱼不需要眼泪，\n因为它们一直住在水里。\n但我不是鱼啊。\n\n想你的时候，\n连笔迹都是弯的。',
   '有些念头像细胞一样分裂。\n\n一个想你的念头，\n变成两个，四个，八个……\n最后长成奇怪的形状，\n在稿纸上蔓延开来。\n\n我在纸上画了一只虫。\n它很小，但翅膀很精致。\n我想它大概也不知道\n自己为什么会飞。\n\n就像我不知道\n这封信该寄往哪里。',
 ];
 
-// ── Pretext 排版 → 字符粒子 ──
-const charSets = [[], [], []]; // 三封信的字符粒子
+// ── 逐字排版 → 字符粒子 ──
+const charSets = [[], [], []];
 
 function rebuildLayout() {
   const marginX = W * 0.15;
-  const maxW = W * 0.7;
   const fontSize = S * 0.028;
   const LH = fontSize * 1.65;
   const startY = H * 0.09;
-  const FONT = `400 ${fontSize}px "STKaiti","KaiTi","Songti SC",serif`;
+  const charW = fontSize * 0.95; // 中文等宽近似
 
   for (let t = 0; t < 3; t++) {
     charSets[t] = [];
-    const prepared = prepareWithSegments(TEXTS[t], FONT, { whiteSpace: 'pre-wrap' });
-    const { lines } = layoutWithLines(prepared, maxW, LH);
-
+    const lines = TEXTS[t].split('\n');
+    let lineIdx = 0;
     for (let li = 0; li < lines.length; li++) {
       const line = lines[li];
-      const text = line.text;
-      // 每个字符独立粒子
-      for (let ci = 0; ci < text.length; ci++) {
-        const ch = text[ci];
-        if (ch === '\n') continue;
-        const charWidth = fontSize * (ch.match(/[\u4e00-\u9fff]/) ? 1 : 0.55);
-        const tx = marginX + ci * charWidth;
-        const ty = startY + li * LH + LH * 0.78;
+      if (line === '') { lineIdx++; continue; }
+      for (let ci = 0; ci < line.length; ci++) {
+        const ch = line[ci];
+        const isWide = /[\u4e00-\u9fff\u3000-\u303f\uff00-\uffef]/.test(ch);
+        const tx = marginX + ci * (isWide ? charW : charW * 0.55);
+        const ty = startY + lineIdx * LH + LH * 0.78;
         charSets[t].push({
           char: ch,
-          tx, ty,        // 目标位置（Pretext排版）
-          x: tx, y: ty,  // 当前位置（物理）
-          vx: 0, vy: 0,  // 速度
-          line: li,
-          index: ci,
+          tx, ty,
+          x: tx, y: ty,
+          vx: 0, vy: 0,
           phase: Math.random() * Math.PI * 2,
         });
       }
+      lineIdx++;
     }
   }
 }
 
-// ── 鱼 ──
+// ── 鱼类 ──
 class Fish {
-  constructor(x, y, size, style) {
+  constructor(x, y, style) {
     this.x = x; this.y = y;
-    this.size = size;
-    this.style = style; // 'elegant', 'casual', 'sketch'
-    this.tx = x; this.ty = y;
+    this.size = 0;
+    this.style = style;
     this.vx = 0; this.vy = 0;
     this.angle = 0;
     this.tailPhase = 0;
@@ -102,95 +94,90 @@ class Fish {
   }
 
   update() {
-    // 随机游走目标
     this.wanderTimer--;
     if (this.wanderTimer <= 0) {
-      this.wanderTimer = 100 + Math.random() * 200;
-      this.wanderX = W * (0.15 + Math.random() * 0.7);
-      this.wanderY = H * (0.15 + Math.random() * 0.7);
+      this.wanderTimer = 80 + Math.random() * 160;
+      this.wanderX = W * (0.18 + Math.random() * 0.64);
+      this.wanderY = H * (0.12 + Math.random() * 0.72);
     }
-
-    // 弹簧力向目标
     const dx = this.wanderX - this.x;
     const dy = this.wanderY - this.y;
-    this.vx += dx * 0.0008;
-    this.vy += dy * 0.0008;
-    this.vx *= 0.985;
-    this.vy *= 0.985;
+    this.vx += dx * 0.001;
+    this.vy += dy * 0.001;
+    this.vx *= 0.982;
+    this.vy *= 0.982;
     this.x += this.vx;
     this.y += this.vy;
+    // 限制在屏幕内
+    this.x = Math.max(30, Math.min(W - 30, this.x));
+    this.y = Math.max(30, Math.min(H - 30, this.y));
 
-    // 朝向
-    const speed = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
-    if (speed > 0.2) {
-      const targetAngle = Math.atan2(this.vy, this.vx);
-      let diff = targetAngle - this.angle;
+    const spd = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
+    if (spd > 0.15) {
+      const ta = Math.atan2(this.vy, this.vx);
+      let diff = ta - this.angle;
       while (diff > Math.PI) diff -= Math.PI * 2;
       while (diff < -Math.PI) diff += Math.PI * 2;
-      this.angle += diff * 0.05;
+      this.angle += diff * 0.06;
     }
-    this.tailPhase += 0.08 + speed * 0.02;
+    this.tailPhase += 0.08 + spd * 0.03;
   }
 
   draw(alpha) {
-    if (alpha <= 0.01) return;
+    if (alpha < 0.01) return;
+    const sz = this.size;
+    if (sz < 2) return;
+    const tail = Math.sin(this.tailPhase) * 0.4;
     ctx.save();
     ctx.globalAlpha = alpha;
     ctx.translate(this.x, this.y);
     ctx.rotate(this.angle);
 
-    const sz = this.size;
-    const tailSwing = Math.sin(this.tailPhase) * 0.35;
-
-    if (this.style === 'elegant') {
-      // Phase1: 精致描线鱼
-      ctx.strokeStyle = 'rgba(40,70,130,0.6)';
-      ctx.lineWidth = 1.2;
+    if (this.style === 0) {
+      // ── 精致描线鱼 ──
       // 身体
+      ctx.strokeStyle = 'rgba(40,70,130,0.6)';
+      ctx.lineWidth = 1.3;
       ctx.beginPath();
       ctx.ellipse(0, 0, sz, sz * 0.4, 0, 0, Math.PI * 2);
       ctx.stroke();
-      // 内部淡蓝
       ctx.fillStyle = 'rgba(160,200,240,0.08)';
       ctx.fill();
-      // 尾巴（摆动）
+      // 尾巴
       ctx.beginPath();
-      ctx.moveTo(sz * 0.7, 0);
-      ctx.quadraticCurveTo(sz * 1.1, sz * tailSwing - sz * 0.4,
-                            sz * 1.5, sz * tailSwing - sz * 0.5);
-      ctx.moveTo(sz * 0.7, 0);
-      ctx.quadraticCurveTo(sz * 1.1, sz * tailSwing + sz * 0.4,
-                            sz * 1.5, sz * tailSwing + sz * 0.5);
+      ctx.moveTo(sz * 0.75, 0);
+      ctx.quadraticCurveTo(sz * 1.1, sz * tail - sz * 0.35, sz * 1.5, sz * tail - sz * 0.5);
+      ctx.moveTo(sz * 0.75, 0);
+      ctx.quadraticCurveTo(sz * 1.1, sz * tail + sz * 0.35, sz * 1.5, sz * tail + sz * 0.5);
       ctx.stroke();
-      // 鳞（弧线）
+      // 鳞弧
+      ctx.strokeStyle = 'rgba(40,70,130,0.18)';
       for (let i = 0; i < 4; i++) {
-        ctx.strokeStyle = 'rgba(40,70,130,0.2)';
         ctx.beginPath();
-        ctx.arc(-sz * 0.2 + i * sz * 0.25, 0, sz * 0.18, -0.6, 0.6);
+        ctx.arc(-sz * 0.15 + i * sz * 0.22, 0, sz * 0.16, -0.6, 0.6);
         ctx.stroke();
       }
+      // 背鳍
+      ctx.strokeStyle = 'rgba(40,70,130,0.35)';
+      ctx.beginPath();
+      ctx.moveTo(-sz * 0.2, -sz * 0.36);
+      ctx.quadraticCurveTo(0, -sz * 0.62, sz * 0.3, -sz * 0.36);
+      ctx.stroke();
       // 眼
       ctx.fillStyle = 'rgba(30,50,100,0.7)';
       ctx.beginPath();
-      ctx.arc(-sz * 0.55, -sz * 0.06, sz * 0.065, 0, Math.PI * 2);
+      ctx.arc(-sz * 0.55, -sz * 0.05, sz * 0.07, 0, Math.PI * 2);
       ctx.fill();
-      // 背鳍
-      ctx.strokeStyle = 'rgba(40,70,130,0.4)';
-      ctx.beginPath();
-      ctx.moveTo(-sz * 0.2, -sz * 0.35);
-      ctx.quadraticCurveTo(0, -sz * 0.65, sz * 0.3, -sz * 0.35);
-      ctx.stroke();
       // 气泡
-      ctx.strokeStyle = 'rgba(60,100,160,0.25)';
+      ctx.strokeStyle = 'rgba(60,100,160,0.2)';
+      ctx.lineWidth = 0.7;
       for (let i = 0; i < 3; i++) {
-        const bx = -sz * 0.8 - i * sz * 0.2;
-        const by = -sz * 0.15 - i * sz * 0.12 + Math.sin(time * 0.05 + i) * sz * 0.05;
         ctx.beginPath();
-        ctx.arc(bx, by, sz * (0.04 + i * 0.02), 0, Math.PI * 2);
+        ctx.arc(-sz * 0.85 - i * sz * 0.2, -sz * 0.1 - i * sz * 0.12 + Math.sin(time * 0.04 + i) * 3, sz * (0.035 + i * 0.018), 0, Math.PI * 2);
         ctx.stroke();
       }
-    } else if (this.style === 'casual') {
-      // Phase2: 随性童趣鱼
+    } else if (this.style === 1) {
+      // ── 童趣鱼 ──
       ctx.strokeStyle = 'rgba(40,60,130,0.55)';
       ctx.lineWidth = 1.8;
       ctx.beginPath();
@@ -198,238 +185,214 @@ class Fish {
       ctx.bezierCurveTo(-sz * 0.5, -sz * 0.6, sz * 0.5, -sz * 0.5, sz * 0.7, 0);
       ctx.bezierCurveTo(sz * 0.5, sz * 0.5, -sz * 0.5, sz * 0.6, -sz, 0);
       ctx.stroke();
-      // 随性尾巴
       ctx.beginPath();
       ctx.moveTo(sz * 0.5, 0);
-      ctx.lineTo(sz * 1.3, sz * tailSwing - sz * 0.45);
+      ctx.lineTo(sz * 1.3, sz * tail - sz * 0.4);
       ctx.moveTo(sz * 0.5, 0);
-      ctx.lineTo(sz * 1.3, sz * tailSwing + sz * 0.45);
+      ctx.lineTo(sz * 1.3, sz * tail + sz * 0.4);
       ctx.stroke();
-      // 大眼
       ctx.fillStyle = 'rgba(40,60,130,0.6)';
       ctx.beginPath();
       ctx.arc(-sz * 0.4, -sz * 0.08, sz * 0.1, 0, Math.PI * 2);
       ctx.fill();
-      // 嘴
+      ctx.lineWidth = 1;
       ctx.beginPath();
-      ctx.arc(-sz * 0.7, sz * 0.05, sz * 0.08, -0.3, 0.3);
+      ctx.arc(-sz * 0.72, sz * 0.05, sz * 0.08, -0.4, 0.4);
       ctx.stroke();
     } else {
-      // Phase3: 素描线条鱼（更抽象）
-      ctx.strokeStyle = 'rgba(30,50,110,0.45)';
+      // ── 素描鱼 ──
+      ctx.strokeStyle = 'rgba(30,50,110,0.4)';
       ctx.lineWidth = 0.8;
-      // 多层轮廓（素描感）
-      for (let layer = 0; layer < 3; layer++) {
-        const off = (layer - 1) * 1.5;
+      for (let l = 0; l < 3; l++) {
+        const o = (l - 1) * 1.2;
         ctx.beginPath();
-        ctx.ellipse(off, off * 0.5, sz * (0.95 + layer * 0.03), sz * (0.35 + layer * 0.01), 0, 0, Math.PI * 2);
+        ctx.ellipse(o, o * 0.4, sz * (0.96 + l * 0.03), sz * (0.36 + l * 0.01), 0, 0, Math.PI * 2);
         ctx.stroke();
       }
-      // 尾
       ctx.lineWidth = 0.7;
       ctx.beginPath();
-      ctx.moveTo(sz * 0.6, 0);
-      ctx.bezierCurveTo(sz, -sz * 0.3 + sz * tailSwing, sz * 1.2, -sz * 0.5 + sz * tailSwing, sz * 1.4, -sz * 0.4 + sz * tailSwing);
-      ctx.moveTo(sz * 0.6, 0);
-      ctx.bezierCurveTo(sz, sz * 0.3 + sz * tailSwing, sz * 1.2, sz * 0.5 + sz * tailSwing, sz * 1.4, sz * 0.4 + sz * tailSwing);
+      ctx.moveTo(sz * 0.65, 0);
+      ctx.bezierCurveTo(sz, -sz * 0.3 + sz * tail, sz * 1.2, -sz * 0.5 + sz * tail, sz * 1.4, -sz * 0.4 + sz * tail);
+      ctx.moveTo(sz * 0.65, 0);
+      ctx.bezierCurveTo(sz, sz * 0.3 + sz * tail, sz * 1.2, sz * 0.5 + sz * tail, sz * 1.4, sz * 0.4 + sz * tail);
       ctx.stroke();
-      // 眼
-      ctx.fillStyle = 'rgba(30,50,110,0.5)';
+      ctx.fillStyle = 'rgba(30,50,110,0.45)';
       ctx.beginPath();
       ctx.arc(-sz * 0.45, -sz * 0.05, sz * 0.05, 0, Math.PI * 2);
       ctx.fill();
     }
-
     ctx.restore();
   }
 }
 
 const FISH = [
-  new Fish(W * 0.3, H * 0.6, 0, 'elegant'),
-  new Fish(W * 0.7, H * 0.5, 0, 'casual'),
-  new Fish(W * 0.5, H * 0.4, 0, 'sketch'),
+  new Fish(300, 400, 0),
+  new Fish(500, 350, 1),
+  new Fish(400, 300, 2),
 ];
 
 // ── 水波纹 ──
 const RIPPLES = [];
-function addRipple(x, y, maxR) {
-  RIPPLES.push({ x, y, r: 0, maxR: maxR || S * 0.08, life: 1 });
+function addRipple(x, y) {
+  RIPPLES.push({ x, y, r: 0, life: 1 });
 }
 
-// ── 笔记本横线 ──
-function drawNotebookLines() {
-  const lineSpacing = S * 0.035;
+// ── 笔记本背景 ──
+function drawNotebook() {
+  const lineH = S * 0.035;
   const startY = H * 0.08;
   ctx.strokeStyle = 'rgba(160,190,220,0.22)';
   ctx.lineWidth = 0.5;
   ctx.beginPath();
-  for (let y = startY; y < H * 0.95; y += lineSpacing) {
-    ctx.moveTo(W * 0.05, y);
-    ctx.lineTo(W * 0.95, y);
+  for (let y = startY; y < H * 0.95; y += lineH) {
+    ctx.moveTo(W * 0.05, y); ctx.lineTo(W * 0.95, y);
   }
   ctx.stroke();
-  // 红色竖线
   ctx.strokeStyle = 'rgba(200,100,100,0.25)';
   ctx.lineWidth = 0.7;
   ctx.beginPath();
-  ctx.moveTo(W * 0.12, H * 0.03);
-  ctx.lineTo(W * 0.12, H * 0.97);
+  ctx.moveTo(W * 0.12, H * 0.03); ctx.lineTo(W * 0.12, H * 0.97);
   ctx.stroke();
 }
 
-// ── 纸张纹理 ──
-function drawPaperTexture() {
+function drawPaper() {
   ctx.globalAlpha = 0.012;
-  for (let i = 0; i < 200; i++) {
-    ctx.fillStyle = i % 3 === 0 ? '#c8c0b0' : '#d8d0c0';
-    ctx.fillRect((i * 97 + time * 0.08) % W, (i * 157) % H, 1 + Math.random() * 2, 1);
+  for (let i = 0; i < 150; i++) {
+    ctx.fillStyle = i % 3 === 0 ? '#c8c0b0' : '#ddd4c4';
+    ctx.fillRect((i * 97 + time * 0.06) % W, (i * 157) % H, 1.5, 1);
   }
   ctx.globalAlpha = 1;
 }
 
-// ── 墨滴 ──
-const INKDROPS = [];
-
-// ── 物理：鱼排斥文字 ──
-function applyFishRepulsion(chars, fish, strength) {
-  const repelR = fish.size * 3.5; // 排斥半径
+// ── 物理 ──
+function fishRepel(chars, fish, str) {
+  const R = fish.size * 4;
   for (const ch of chars) {
     const dx = ch.x - fish.x;
     const dy = ch.y - fish.y;
-    const dist = Math.sqrt(dx * dx + dy * dy);
-    if (dist < repelR && dist > 1) {
-      const force = (1 - dist / repelR) * strength;
-      ch.vx += (dx / dist) * force;
-      ch.vy += (dy / dist) * force;
+    const d = Math.sqrt(dx * dx + dy * dy);
+    if (d < R && d > 0.5) {
+      const f = (1 - d / R) * str;
+      ch.vx += (dx / d) * f;
+      ch.vy += (dy / d) * f;
     }
   }
 }
 
-// ── 水波纹影响文字 ──
-function applyRippleEffect(chars) {
-  for (const ripple of RIPPLES) {
-    if (ripple.life <= 0) continue;
+function rippleEffect(chars) {
+  for (const rp of RIPPLES) {
+    if (rp.life <= 0) continue;
     for (const ch of chars) {
-      const dx = ch.x - ripple.x;
-      const dy = ch.y - ripple.y;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-      const ringDist = Math.abs(dist - ripple.r);
-      if (ringDist < 15) {
-        const waveStrength = ripple.life * (1 - ringDist / 15) * 2;
-        const angle = Math.atan2(dy, dx);
-        ch.vy += Math.sin(angle) * waveStrength * 0.3;
-        ch.vx += Math.cos(angle) * waveStrength * 0.15;
+      const dx = ch.x - rp.x;
+      const dy = ch.y - rp.y;
+      const d = Math.sqrt(dx * dx + dy * dy);
+      const ring = Math.abs(d - rp.r);
+      if (ring < 12) {
+        const w = rp.life * (1 - ring / 12) * 1.5;
+        const a = Math.atan2(dy, dx);
+        ch.vx += Math.cos(a) * w * 0.15;
+        ch.vy += Math.sin(a) * w * 0.25;
       }
     }
   }
 }
 
-// ── 字符物理步进（弹回目标位置）──
 function stepChars(chars) {
   for (const ch of chars) {
-    // 弹簧力回目标
-    const dx = ch.tx - ch.x;
-    const dy = ch.ty - ch.y;
-    ch.vx += dx * 0.03;
-    ch.vy += dy * 0.03;
-    ch.vx *= 0.88; // 阻尼
-    ch.vy *= 0.88;
+    ch.vx += (ch.tx - ch.x) * 0.035;
+    ch.vy += (ch.ty - ch.y) * 0.035;
+    ch.vx *= 0.86;
+    ch.vy *= 0.86;
     ch.x += ch.vx;
     ch.y += ch.vy;
   }
 }
 
-// ── 绘制字符 ──
+// ── 绘制字符（逐字出现）──
 function drawChars(chars, alpha, style) {
-  if (alpha <= 0.01) return;
+  if (alpha < 0.01) return;
   const fontSize = S * 0.028;
-  const phaseInCycle = cycleFrame % (PHASE_DUR + TRANS);
-  const totalToShow = Math.floor(phaseInCycle * 0.45);
+  const phaseT = cycleFrame % (PHASE_DUR + TRANS);
+  const total = Math.floor(phaseT * 0.5);
 
-  for (let i = 0; i < chars.length; i++) {
-    if (i >= totalToShow) break;
+  for (let i = 0; i < Math.min(chars.length, total); i++) {
     const ch = chars[i];
-    const charAlpha = Math.min(1, (totalToShow - i) * 0.3) * alpha;
-    if (charAlpha <= 0.01) continue;
+    const ca = Math.min(1, (total - i) * 0.25) * alpha;
+    if (ca < 0.01) continue;
 
-    // 距目标的偏移影响墨色
-    const displacement = Math.sqrt((ch.x - ch.tx) ** 2 + (ch.y - ch.ty) ** 2);
-    const inkFade = Math.max(0.3, 1 - displacement * 0.008); // 被推远时变淡
+    const disp = Math.sqrt((ch.x - ch.tx) ** 2 + (ch.y - ch.ty) ** 2);
+    const ink = Math.max(0.25, 1 - disp * 0.01);
 
-    let fontStyle;
-    if (style === 'neat') fontStyle = `400 ${fontSize}px "STKaiti","KaiTi","Songti SC",serif`;
-    else if (style === 'casual') fontStyle = `400 ${fontSize * (1 + Math.sin(i * 0.3) * 0.08)}px "STXingkai","STKaiti",serif`;
-    else fontStyle = `500 ${fontSize * (1 + Math.sin(i * 0.5) * 0.1)}px "STKaiti","KaiTi",serif`;
+    let f;
+    if (style === 0) f = `400 ${fontSize}px "STKaiti","KaiTi","Songti SC",serif`;
+    else if (style === 1) f = `400 ${fontSize * (1 + Math.sin(i * 0.3) * 0.06)}px "STXingkai","STKaiti","KaiTi",serif`;
+    else f = `500 ${fontSize * (1 + Math.sin(i * 0.5) * 0.08)}px "STKaiti","KaiTi",serif`;
 
-    ctx.font = fontStyle;
+    ctx.font = f;
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
-    ctx.fillStyle = `rgba(30,50,100,${charAlpha * 0.7 * inkFade})`;
+    ctx.fillStyle = `rgba(30,50,100,${ca * 0.7 * ink})`;
     ctx.fillText(ch.char, ch.x, ch.y);
   }
 }
 
-// ── 插画元素（不变，简化版）──
-function drawBubbleShape(cx, cy, size, alpha) {
-  if (alpha <= 0.01) return;
-  ctx.save(); ctx.globalAlpha = alpha * 0.4;
-  ctx.strokeStyle = 'rgba(60,90,140,0.35)';
-  ctx.lineWidth = 1;
+// ── 插画（简化）──
+function drawBubble(x, y, size, a) {
+  if (a < 0.01) return;
+  ctx.save(); ctx.globalAlpha = a * 0.4;
+  ctx.strokeStyle = 'rgba(60,90,140,0.35)'; ctx.lineWidth = 1;
   ctx.beginPath();
-  ctx.moveTo(cx, cy - size);
-  ctx.bezierCurveTo(cx + size * 0.8, cy - size * 0.8, cx + size * 0.7, cy + size * 0.2, cx, cy + size * 0.9);
-  ctx.bezierCurveTo(cx - size * 0.7, cy + size * 0.2, cx - size * 0.8, cy - size * 0.8, cx, cy - size);
+  ctx.moveTo(x, y - size);
+  ctx.bezierCurveTo(x + size * 0.8, y - size * 0.8, x + size * 0.7, y + size * 0.2, x, y + size * 0.9);
+  ctx.bezierCurveTo(x - size * 0.7, y + size * 0.2, x - size * 0.8, y - size * 0.8, x, y - size);
   ctx.stroke();
   ctx.fillStyle = 'rgba(180,210,240,0.06)'; ctx.fill();
   ctx.restore();
 }
 
-function drawOrganicShapes(cx, cy, size, alpha) {
-  if (alpha <= 0.01) return;
-  ctx.save(); ctx.globalAlpha = alpha;
-  ctx.strokeStyle = 'rgba(30,60,130,0.25)';
-  ctx.lineWidth = 0.7;
-  for (let i = 0; i < 6; i++) {
-    const a = time * 0.002 + i * Math.PI * 2 / 6;
-    const ox = cx + Math.cos(a) * size * 0.4;
-    const oy = cy + Math.sin(a) * size * 0.3;
-    const r = size * (0.15 + Math.sin(i * 1.3) * 0.08);
-    ctx.beginPath();
-    for (let j = 0; j <= 12; j++) {
-      const ja = (j / 12) * Math.PI * 2;
-      const rr = r * (1 + Math.sin(ja * 3 + i) * 0.2);
-      j === 0 ? ctx.moveTo(ox + Math.cos(ja) * rr, oy + Math.sin(ja) * rr)
-              : ctx.lineTo(ox + Math.cos(ja) * rr, oy + Math.sin(ja) * rr);
-    }
-    ctx.closePath(); ctx.stroke();
-    ctx.fillStyle = 'rgba(30,60,130,0.04)'; ctx.fill();
-  }
-  // 小昆虫
-  const ix = cx + size * 0.35, iy = cy - size * 0.15, is2 = size * 0.08;
-  ctx.fillStyle = 'rgba(25,40,80,0.5)';
-  ctx.beginPath(); ctx.ellipse(ix, iy, is2 * 0.3, is2 * 0.2, 0, 0, Math.PI * 2); ctx.fill();
-  ctx.beginPath(); ctx.ellipse(ix + is2 * 0.5, iy, is2 * 0.4, is2 * 0.25, 0, 0, Math.PI * 2); ctx.fill();
-  ctx.beginPath(); ctx.ellipse(ix + is2 * 1.1, iy, is2 * 0.5, is2 * 0.3, 0, 0, Math.PI * 2); ctx.fill();
-  ctx.strokeStyle = 'rgba(40,70,140,0.35)'; ctx.lineWidth = 0.5;
-  ctx.fillStyle = 'rgba(180,210,240,0.08)';
-  ctx.beginPath(); ctx.ellipse(ix + is2 * 0.5, iy - is2 * 0.3, is2 * 0.7, is2 * 0.35, -0.3, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-  ctx.beginPath(); ctx.ellipse(ix + is2 * 0.5, iy + is2 * 0.3, is2 * 0.55, is2 * 0.25, 0.3, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-  ctx.restore();
-}
-
-function drawDoodleCircles(cx, cy, size, alpha) {
-  if (alpha <= 0.01) return;
-  ctx.save(); ctx.globalAlpha = alpha * 0.5;
-  ctx.strokeStyle = 'rgba(40,70,140,0.2)';
-  ctx.lineWidth = 1;
+function drawDoodles(cx, cy, size, a) {
+  if (a < 0.01) return;
+  ctx.save(); ctx.globalAlpha = a * 0.45;
+  ctx.strokeStyle = 'rgba(40,70,140,0.2)'; ctx.lineWidth = 1;
   for (let i = 0; i < 5; i++) {
     ctx.beginPath();
-    ctx.arc(cx + Math.sin(i * 2.3) * size * 0.5, cy + Math.cos(i * 1.7) * size * 0.4,
-            size * (0.12 + i * 0.03), 0, Math.PI * 2);
+    ctx.arc(cx + Math.sin(i * 2.3) * size * 0.5, cy + Math.cos(i * 1.7) * size * 0.4, size * (0.1 + i * 0.025), 0, Math.PI * 2);
     ctx.stroke();
   }
   ctx.restore();
 }
+
+function drawOrganic(cx, cy, size, a) {
+  if (a < 0.01) return;
+  ctx.save(); ctx.globalAlpha = a;
+  ctx.strokeStyle = 'rgba(30,60,130,0.22)'; ctx.lineWidth = 0.7;
+  for (let i = 0; i < 5; i++) {
+    const ang = time * 0.002 + i * Math.PI * 2 / 5;
+    const ox = cx + Math.cos(ang) * size * 0.35;
+    const oy = cy + Math.sin(ang) * size * 0.25;
+    const r = size * (0.12 + Math.sin(i * 1.3) * 0.06);
+    ctx.beginPath();
+    for (let j = 0; j <= 10; j++) {
+      const ja = (j / 10) * Math.PI * 2;
+      const rr = r * (1 + Math.sin(ja * 3 + i) * 0.2);
+      j === 0 ? ctx.moveTo(ox + Math.cos(ja) * rr, oy + Math.sin(ja) * rr) : ctx.lineTo(ox + Math.cos(ja) * rr, oy + Math.sin(ja) * rr);
+    }
+    ctx.closePath(); ctx.stroke();
+  }
+  // 小虫
+  const ix = cx + size * 0.3, iy = cy - size * 0.1, is2 = size * 0.06;
+  ctx.fillStyle = 'rgba(25,40,80,0.45)';
+  ctx.beginPath(); ctx.ellipse(ix, iy, is2 * 0.3, is2 * 0.2, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(ix + is2 * 0.5, iy, is2 * 0.35, is2 * 0.25, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(ix + is2, iy, is2 * 0.45, is2 * 0.3, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = 'rgba(40,70,140,0.3)'; ctx.lineWidth = 0.4;
+  ctx.fillStyle = 'rgba(180,210,240,0.06)';
+  ctx.beginPath(); ctx.ellipse(ix + is2 * 0.5, iy - is2 * 0.3, is2 * 0.6, is2 * 0.3, -0.3, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  ctx.restore();
+}
+
+// ── 墨滴 ──
+const INKDROPS = [];
 
 // ══ 主循环 ══
 function draw() {
@@ -453,38 +416,39 @@ function draw() {
   const w1e = Math.min(1, w1 + wR);
 
   // 更新鱼尺寸
-  FISH[0].size = S * 0.03;
-  FISH[1].size = S * 0.025;
-  FISH[2].size = S * 0.02;
+  FISH[0].size = S * 0.032;
+  FISH[1].size = S * 0.028;
+  FISH[2].size = S * 0.022;
 
-  // 更新鱼
+  // 更新所有鱼（始终运行物理）
   FISH.forEach(f => f.update());
 
-  // 鱼产生水波纹
-  if (time % 30 === 0) {
-    const activeFish = w1e > 0.5 ? FISH[0] : w2 > 0.5 ? FISH[1] : FISH[2];
-    addRipple(activeFish.x, activeFish.y, S * 0.06);
+  // 鱼产生波纹
+  if (time % 25 === 0) {
+    if (w1e > 0.3) addRipple(FISH[0].x, FISH[0].y);
+    if (w2 > 0.3) addRipple(FISH[1].x, FISH[1].y);
+    if (w3 > 0.3) addRipple(FISH[2].x, FISH[2].y);
   }
 
-  // 物理：排斥 + 波纹 + 步进
-  if (w1e > 0.3) { applyFishRepulsion(charSets[0], FISH[0], 1.5); applyRippleEffect(charSets[0]); stepChars(charSets[0]); }
-  if (w2 > 0.3) { applyFishRepulsion(charSets[1], FISH[1], 1.8); applyRippleEffect(charSets[1]); stepChars(charSets[1]); }
-  if (w3 > 0.3) { applyFishRepulsion(charSets[2], FISH[2], 1.2); applyRippleEffect(charSets[2]); stepChars(charSets[2]); }
+  // 物理
+  if (w1e > 0.1) { fishRepel(charSets[0], FISH[0], 1.8); rippleEffect(charSets[0]); stepChars(charSets[0]); }
+  if (w2 > 0.1) { fishRepel(charSets[1], FISH[1], 2.0); rippleEffect(charSets[1]); stepChars(charSets[1]); }
+  if (w3 > 0.1) { fishRepel(charSets[2], FISH[2], 1.4); rippleEffect(charSets[2]); stepChars(charSets[2]); }
 
   // ── 绘制 ──
   ctx.fillStyle = '#f5f2eb';
   ctx.fillRect(0, 0, W, H);
-  drawPaperTexture();
-  drawNotebookLines();
+  drawPaper();
+  drawNotebook();
 
   // 水波纹
   for (let i = RIPPLES.length - 1; i >= 0; i--) {
     const rp = RIPPLES[i];
-    rp.r += 1.2;
-    rp.life -= 0.012;
+    rp.r += 1.0;
+    rp.life -= 0.01;
     if (rp.life <= 0) { RIPPLES.splice(i, 1); continue; }
-    ctx.strokeStyle = `rgba(100,150,200,${rp.life * 0.12})`;
-    ctx.lineWidth = 0.8;
+    ctx.strokeStyle = `rgba(100,150,200,${rp.life * 0.1})`;
+    ctx.lineWidth = 0.7;
     ctx.beginPath();
     ctx.arc(rp.x, rp.y, rp.r, 0, Math.PI * 2);
     ctx.stroke();
@@ -492,38 +456,36 @@ function draw() {
 
   // Phase 1
   if (w1e > 0.01) {
-    drawChars(charSets[0], w1e, 'neat');
-    drawBubbleShape(W * 0.25, H * 0.75, S * 0.08, w1e * 0.6);
+    drawChars(charSets[0], w1e, 0);
+    drawBubble(W * 0.25, H * 0.78, S * 0.07, w1e * 0.5);
     FISH[0].draw(w1e);
   }
-
   // Phase 2
   if (w2 > 0.01) {
-    drawChars(charSets[1], w2, 'casual');
-    drawDoodleCircles(W * 0.72, H * 0.6, S * 0.1, w2);
+    drawChars(charSets[1], w2, 1);
+    drawDoodles(W * 0.72, H * 0.62, S * 0.1, w2);
     FISH[1].draw(w2);
   }
-
   // Phase 3
   if (w3 > 0.01) {
-    drawChars(charSets[2], w3, 'artistic');
-    drawOrganicShapes(W * 0.65, H * 0.55, S * 0.16, w3);
+    drawChars(charSets[2], w3, 2);
+    drawOrganic(W * 0.65, H * 0.55, S * 0.15, w3);
     FISH[2].draw(w3);
   }
 
   // 墨滴
-  if (Math.random() < 0.008) INKDROPS.push({ x: W * (0.2 + Math.random() * 0.6), y: H * (0.2 + Math.random() * 0.6), r: 0, maxR: 2 + Math.random() * 3, life: 1 });
+  if (Math.random() < 0.006) INKDROPS.push({ x: W * (0.2 + Math.random() * 0.6), y: H * (0.15 + Math.random() * 0.7), r: 0, max: 1.5 + Math.random() * 2.5, life: 1 });
   for (let i = INKDROPS.length - 1; i >= 0; i--) {
-    const d = INKDROPS[i]; d.r = Math.min(d.maxR, d.r + 0.12); d.life -= 0.006;
+    const d = INKDROPS[i]; d.r = Math.min(d.max, d.r + 0.1); d.life -= 0.005;
     if (d.life <= 0) { INKDROPS.splice(i, 1); continue; }
-    ctx.fillStyle = `rgba(30,50,100,${d.life * 0.12})`;
+    ctx.fillStyle = `rgba(30,50,100,${d.life * 0.1})`;
     ctx.beginPath(); ctx.arc(d.x, d.y, d.r, 0, Math.PI * 2); ctx.fill();
   }
 
   // 阶段指示
   for (let i = 0; i < 3; i++) {
-    const isAct = Math.round(phaseSmooth) === i || (phaseSmooth > 2.5 && i === 0);
-    ctx.fillStyle = isAct ? 'rgba(40,60,120,0.6)' : 'rgba(160,170,190,0.3)';
+    const act = Math.round(phaseSmooth) === i || (phaseSmooth > 2.5 && i === 0);
+    ctx.fillStyle = act ? 'rgba(40,60,120,0.6)' : 'rgba(160,170,190,0.3)';
     ctx.beginPath(); ctx.arc(W / 2 + (i - 1) * 16, H * 0.96, 3, 0, Math.PI * 2); ctx.fill();
   }
 }
