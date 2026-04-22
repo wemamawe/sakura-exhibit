@@ -161,93 +161,105 @@ class Fish {
     ctx.translate(this.x, this.y);
     ctx.rotate(this.angle);
 
-    if (this.style === 0) {
-      // ── 精致描线鱼 ──
-      // 身体
-      ctx.strokeStyle = 'rgba(40,70,130,0.6)';
-      ctx.lineWidth = 1.3;
+    // ── 通用圆胖鱼形（梭形身体）──
+    // 颜色/粗细按风格微调
+    const inkA = [0.6, 0.55, 0.45][this.style];
+    const lw = [1.3, 1.8, 1.0][this.style];
+    ctx.strokeStyle = `rgba(40,65,130,${inkA})`;
+    ctx.lineWidth = lw;
+
+    // 身体：饱满梭形（头圆尾窄）
+    ctx.beginPath();
+    ctx.moveTo(sz * 0.7, 0);  // 尾端
+    ctx.bezierCurveTo(sz * 0.5, -sz * 0.55,  -sz * 0.3, -sz * 0.6,  -sz * 0.7, -sz * 0.15); // 上弧
+    ctx.bezierCurveTo(-sz * 0.85, 0,  -sz * 0.85, 0,  -sz * 0.7, sz * 0.15); // 头部圆弧
+    ctx.bezierCurveTo(-sz * 0.3, sz * 0.6,  sz * 0.5, sz * 0.55,  sz * 0.7, 0); // 下弧
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(180,210,240,0.1)';
+    ctx.fill();
+    ctx.stroke();
+
+    // 尾鳍（大而明显，带摆动）
+    ctx.beginPath();
+    ctx.moveTo(sz * 0.6, -sz * 0.08);
+    ctx.bezierCurveTo(sz * 0.9, -sz * 0.15 + sz * tail, sz * 1.1, -sz * 0.3 + sz * tail, sz * 1.3, -sz * 0.55 + sz * tail);
+    ctx.moveTo(sz * 0.6, sz * 0.08);
+    ctx.bezierCurveTo(sz * 0.9, sz * 0.15 + sz * tail, sz * 1.1, sz * 0.3 + sz * tail, sz * 1.3, sz * 0.55 + sz * tail);
+    // 尾鳍连接弧
+    ctx.moveTo(sz * 1.3, -sz * 0.55 + sz * tail);
+    ctx.bezierCurveTo(sz * 1.15, -sz * 0.1 + sz * tail, sz * 1.15, sz * 0.1 + sz * tail, sz * 1.3, sz * 0.55 + sz * tail);
+    ctx.stroke();
+    // 尾鳍填充
+    ctx.beginPath();
+    ctx.moveTo(sz * 0.6, 0);
+    ctx.bezierCurveTo(sz * 0.9, -sz * 0.15 + sz * tail, sz * 1.1, -sz * 0.3 + sz * tail, sz * 1.3, -sz * 0.55 + sz * tail);
+    ctx.bezierCurveTo(sz * 1.15, -sz * 0.1 + sz * tail, sz * 1.15, sz * 0.1 + sz * tail, sz * 1.3, sz * 0.55 + sz * tail);
+    ctx.bezierCurveTo(sz * 1.1, sz * 0.3 + sz * tail, sz * 0.9, sz * 0.15 + sz * tail, sz * 0.6, 0);
+    ctx.fillStyle = 'rgba(140,180,220,0.08)';
+    ctx.fill();
+
+    // 背鳍
+    ctx.strokeStyle = `rgba(40,65,130,${inkA * 0.6})`;
+    ctx.beginPath();
+    ctx.moveTo(-sz * 0.1, -sz * 0.5);
+    ctx.bezierCurveTo(sz * 0.05, -sz * 0.8, sz * 0.3, -sz * 0.75, sz * 0.4, -sz * 0.45);
+    ctx.stroke();
+
+    // 腹鳍（两片小的）
+    ctx.beginPath();
+    ctx.moveTo(-sz * 0.05, sz * 0.42);
+    ctx.bezierCurveTo(0, sz * 0.65, sz * 0.15, sz * 0.6, sz * 0.15, sz * 0.42);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(sz * 0.2, sz * 0.4);
+    ctx.bezierCurveTo(sz * 0.25, sz * 0.6, sz * 0.38, sz * 0.55, sz * 0.35, sz * 0.38);
+    ctx.stroke();
+
+    // 胸鳍（身体侧面扇形）
+    ctx.strokeStyle = `rgba(40,65,130,${inkA * 0.5})`;
+    ctx.beginPath();
+    ctx.moveTo(-sz * 0.25, sz * 0.1);
+    ctx.bezierCurveTo(-sz * 0.4, sz * 0.35, -sz * 0.15, sz * 0.45, -sz * 0.05, sz * 0.25);
+    ctx.stroke();
+
+    // 鳞片弧线
+    ctx.strokeStyle = `rgba(40,65,130,${inkA * 0.2})`;
+    ctx.lineWidth = 0.6;
+    for (let i = 0; i < 5; i++) {
+      const sx = -sz * 0.25 + i * sz * 0.2;
       ctx.beginPath();
-      ctx.ellipse(0, 0, sz, sz * 0.4, 0, 0, Math.PI * 2);
+      ctx.arc(sx, 0, sz * 0.14, -0.7, 0.7);
       ctx.stroke();
-      ctx.fillStyle = 'rgba(160,200,240,0.08)';
-      ctx.fill();
-      // 尾巴
-      ctx.beginPath();
-      ctx.moveTo(sz * 0.75, 0);
-      ctx.quadraticCurveTo(sz * 1.1, sz * tail - sz * 0.35, sz * 1.5, sz * tail - sz * 0.5);
-      ctx.moveTo(sz * 0.75, 0);
-      ctx.quadraticCurveTo(sz * 1.1, sz * tail + sz * 0.35, sz * 1.5, sz * tail + sz * 0.5);
-      ctx.stroke();
-      // 鳞弧
-      ctx.strokeStyle = 'rgba(40,70,130,0.18)';
-      for (let i = 0; i < 4; i++) {
-        ctx.beginPath();
-        ctx.arc(-sz * 0.15 + i * sz * 0.22, 0, sz * 0.16, -0.6, 0.6);
-        ctx.stroke();
-      }
-      // 背鳍
-      ctx.strokeStyle = 'rgba(40,70,130,0.35)';
-      ctx.beginPath();
-      ctx.moveTo(-sz * 0.2, -sz * 0.36);
-      ctx.quadraticCurveTo(0, -sz * 0.62, sz * 0.3, -sz * 0.36);
-      ctx.stroke();
-      // 眼
-      ctx.fillStyle = 'rgba(30,50,100,0.7)';
-      ctx.beginPath();
-      ctx.arc(-sz * 0.55, -sz * 0.05, sz * 0.07, 0, Math.PI * 2);
-      ctx.fill();
-      // 气泡
-      ctx.strokeStyle = 'rgba(60,100,160,0.2)';
-      ctx.lineWidth = 0.7;
-      for (let i = 0; i < 3; i++) {
-        ctx.beginPath();
-        ctx.arc(-sz * 0.85 - i * sz * 0.2, -sz * 0.1 - i * sz * 0.12 + Math.sin(time * 0.04 + i) * 3, sz * (0.035 + i * 0.018), 0, Math.PI * 2);
-        ctx.stroke();
-      }
-    } else if (this.style === 1) {
-      // ── 童趣鱼 ──
-      ctx.strokeStyle = 'rgba(40,60,130,0.55)';
-      ctx.lineWidth = 1.8;
-      ctx.beginPath();
-      ctx.moveTo(-sz, 0);
-      ctx.bezierCurveTo(-sz * 0.5, -sz * 0.6, sz * 0.5, -sz * 0.5, sz * 0.7, 0);
-      ctx.bezierCurveTo(sz * 0.5, sz * 0.5, -sz * 0.5, sz * 0.6, -sz, 0);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(sz * 0.5, 0);
-      ctx.lineTo(sz * 1.3, sz * tail - sz * 0.4);
-      ctx.moveTo(sz * 0.5, 0);
-      ctx.lineTo(sz * 1.3, sz * tail + sz * 0.4);
-      ctx.stroke();
-      ctx.fillStyle = 'rgba(40,60,130,0.6)';
-      ctx.beginPath();
-      ctx.arc(-sz * 0.4, -sz * 0.08, sz * 0.1, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.arc(-sz * 0.72, sz * 0.05, sz * 0.08, -0.4, 0.4);
-      ctx.stroke();
-    } else {
-      // ── 素描鱼 ──
-      ctx.strokeStyle = 'rgba(30,50,110,0.4)';
-      ctx.lineWidth = 0.8;
-      for (let l = 0; l < 3; l++) {
-        const o = (l - 1) * 1.2;
-        ctx.beginPath();
-        ctx.ellipse(o, o * 0.4, sz * (0.96 + l * 0.03), sz * (0.36 + l * 0.01), 0, 0, Math.PI * 2);
-        ctx.stroke();
-      }
-      ctx.lineWidth = 0.7;
-      ctx.beginPath();
-      ctx.moveTo(sz * 0.65, 0);
-      ctx.bezierCurveTo(sz, -sz * 0.3 + sz * tail, sz * 1.2, -sz * 0.5 + sz * tail, sz * 1.4, -sz * 0.4 + sz * tail);
-      ctx.moveTo(sz * 0.65, 0);
-      ctx.bezierCurveTo(sz, sz * 0.3 + sz * tail, sz * 1.2, sz * 0.5 + sz * tail, sz * 1.4, sz * 0.4 + sz * tail);
-      ctx.stroke();
-      ctx.fillStyle = 'rgba(30,50,110,0.45)';
-      ctx.beginPath();
-      ctx.arc(-sz * 0.45, -sz * 0.05, sz * 0.05, 0, Math.PI * 2);
-      ctx.fill();
+    }
+
+    // 眼睛（白底+黑瞳+高光）
+    ctx.lineWidth = lw;
+    const eyeX = -sz * 0.52, eyeY = -sz * 0.08, eyeR = sz * 0.09;
+    ctx.fillStyle = 'rgba(250,250,255,0.9)';
+    ctx.beginPath(); ctx.arc(eyeX, eyeY, eyeR, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = `rgba(30,50,100,${inkA})`;
+    ctx.lineWidth = 0.8;
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(20,35,80,0.85)';
+    ctx.beginPath(); ctx.arc(eyeX + eyeR * 0.15, eyeY, eyeR * 0.55, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.9)';
+    ctx.beginPath(); ctx.arc(eyeX + eyeR * 0.3, eyeY - eyeR * 0.2, eyeR * 0.18, 0, Math.PI * 2); ctx.fill();
+
+    // 嘴
+    ctx.strokeStyle = `rgba(40,65,130,${inkA * 0.5})`;
+    ctx.lineWidth = 0.8;
+    ctx.beginPath();
+    ctx.arc(-sz * 0.75, sz * 0.03, sz * 0.06, -0.3, 0.5);
+    ctx.stroke();
+
+    // 气泡（从嘴前方冒出）
+    ctx.strokeStyle = 'rgba(80,120,180,0.18)';
+    ctx.lineWidth = 0.6;
+    for (let i = 0; i < 3; i++) {
+      const bx = -sz * 0.95 - i * sz * 0.18;
+      const by = -sz * 0.05 - i * sz * 0.14 + Math.sin(time * 0.04 + i * 1.5) * 3;
+      const br = sz * (0.03 + i * 0.015);
+      ctx.beginPath(); ctx.arc(bx, by, br, 0, Math.PI * 2); ctx.stroke();
     }
     ctx.restore();
   }
