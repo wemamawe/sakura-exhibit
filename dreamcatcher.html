@@ -6,309 +6,535 @@
 <title>捕梦 · Dreamcatcher</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-body{background:#000;overflow:hidden;touch-action:none}
+body{background:#fff;overflow:hidden;touch-action:none}
 canvas{display:block;position:fixed;top:0;left:0}
 </style>
 </head>
 <body>
 <canvas id="c"></canvas>
-<script type="importmap">{"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js"}}</script>
-<script type="module">
-import * as THREE from 'three';
+<script>
+// ══════════════════════════════════════════════════════
+//  捕梦 — 从空到满的渐变
+//  Phase 1: 方格纸 + 蓝色椭圆气球 + 细线 (极简)
+//  Phase 2: 线框3D地形 + 小花萌芽 + 绿点 (理性诗意)
+//  Phase 3: 花朵密覆 + 花瓣飘散 (盛放)
+//  灵感：费尔南多·佩索阿
+// ══════════════════════════════════════════════════════
+const C = document.getElementById('c');
+const ctx = C.getContext('2d');
+let W, H, S; // S = min(W,H) 基准尺寸
 
-let W = window.innerWidth, H = window.innerHeight;
-let mouseX = 0, mouseY = 0, time = 0;
-
-const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(60, W/H, 0.1, 800);
-camera.position.set(0, 0, 12);
-
-const renderer = new THREE.WebGLRenderer({canvas:document.getElementById('c'),antialias:true,alpha:false});
-renderer.setSize(W, H);
-renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-renderer.setClearColor(0x020210);
-
-// ── 星空背景（草间弥生风：大量圆点）──
-const starCount = 2000;
-const starGeo = new THREE.BufferGeometry();
-const starPos = new Float32Array(starCount * 3);
-const starSizes = new Float32Array(starCount);
-const starColors = new Float32Array(starCount * 3);
-for (let i = 0; i < starCount; i++) {
-  // 分布在巨大球壳中
-  const theta = Math.random() * Math.PI * 2;
-  const phi = Math.acos(2 * Math.random() - 1);
-  const r = 50 + Math.random() * 300;
-  starPos[i*3]   = r * Math.sin(phi) * Math.cos(theta);
-  starPos[i*3+1] = r * Math.sin(phi) * Math.sin(theta);
-  starPos[i*3+2] = r * Math.cos(phi);
-  starSizes[i] = 0.3 + Math.random() * 2;
-  // 颜色：金/银白/淡紫 草间弥生配色
-  const palette = [[1,0.9,0.5],[0.9,0.92,1],[0.7,0.5,0.9],[1,0.7,0.3]][Math.floor(Math.random()*4)];
-  starColors[i*3] = palette[0]; starColors[i*3+1] = palette[1]; starColors[i*3+2] = palette[2];
+function resize() {
+  W = C.width = innerWidth;
+  H = C.height = innerHeight;
+  S = Math.min(W, H);
 }
-starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
-starGeo.setAttribute('size', new THREE.BufferAttribute(starSizes, 1));
-starGeo.setAttribute('color', new THREE.BufferAttribute(starColors, 3));
+resize();
+window.addEventListener('resize', resize);
 
-const starMat = new THREE.ShaderMaterial({
-  transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
-  vertexColors: true,
-  uniforms: { time: {value:0} },
-  vertexShader:`
-    attribute float size;
-    varying vec3 vColor;
-    varying float vSize;
-    uniform float time;
-    void main(){
-      vColor = color;
-      vSize = size;
-      vec4 mv = modelViewMatrix * vec4(position, 1.0);
-      gl_PointSize = size * (200.0 / -mv.z) * (0.8 + sin(time*2.0 + position.x*0.1) * 0.2);
-      gl_Position = projectionMatrix * mv;
+// ── 全局状态 ──
+let time = 0;
+let phase = 0;        // 0→1→2 三阶段
+let phaseSmooth = 0;  // 平滑插值
+const PHASE_DURATION = 420; // 每阶段帧数 (~7秒)
+const TRANSITION = 120;     // 过渡帧数 (~2秒)
+const TOTAL_CYCLE = PHASE_DURATION * 3 + TRANSITION * 3;
+let cycleFrame = 0;
+
+// 诗句
+const POEM_LINES = [
+  '我的心略大于整个宇宙',
+  '',
+  '我将宇宙拿起来',
+  '放在网兜里',
+  '像一朵花',
+  '慢慢开放',
+  '',
+  '— 费尔南多·佩索阿'
+];
+
+// ── 花朵数据 ──
+const FLOWERS = [];
+const PETALS = [];  // 飘散花瓣
+const LEAVES = [];  // 绿叶
+const GREEN_DOTS = []; // 绿点(phase2)
+
+// 在网兜上预设花朵位置
+function initFlowers() {
+  FLOWERS.length = 0;
+  for (let i = 0; i < 35; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const r = Math.random() * 0.85;
+    FLOWERS.push({
+      ox: Math.cos(angle) * r,
+      oy: Math.sin(angle) * r - 0.1,
+      size: 0.02 + Math.random() * 0.035,
+      type: Math.floor(Math.random() * 3), // 0=粉, 1=黄, 2=白
+      phase: Math.random() * Math.PI * 2,
+      bloomDelay: Math.random(), // 0~1 在phase3中的开放延迟
+    });
+  }
+  // 绿叶
+  LEAVES.length = 0;
+  for (let i = 0; i < 25; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const r = Math.random() * 0.9;
+    LEAVES.push({
+      ox: Math.cos(angle) * r,
+      oy: Math.sin(angle) * r - 0.1,
+      size: 0.012 + Math.random() * 0.018,
+      rot: Math.random() * Math.PI * 2,
+      phase: Math.random() * Math.PI * 2,
+    });
+  }
+  // 绿点
+  GREEN_DOTS.length = 0;
+  for (let i = 0; i < 40; i++) {
+    GREEN_DOTS.push({
+      ox: (Math.random() - 0.5) * 1.6,
+      oy: (Math.random() - 0.5) * 1.2 - 0.1,
+      size: 0.003 + Math.random() * 0.005,
+      phase: Math.random() * Math.PI * 2,
+    });
+  }
+}
+initFlowers();
+
+// ── 方格纸背景 ──
+function drawGrid() {
+  const gridSize = S * 0.03;
+  ctx.strokeStyle = 'rgba(200,210,220,0.25)';
+  ctx.lineWidth = 0.5;
+  ctx.beginPath();
+  for (let x = 0; x < W; x += gridSize) {
+    ctx.moveTo(x, 0); ctx.lineTo(x, H);
+  }
+  for (let y = 0; y < H; y += gridSize) {
+    ctx.moveTo(0, y); ctx.lineTo(W, y);
+  }
+  ctx.stroke();
+}
+
+// ── 椭圆气球/网兜轮廓 ──
+function drawBalloonOutline(cx, cy, rx, ry, alpha, color) {
+  ctx.strokeStyle = color || `rgba(140,180,220,${alpha})`;
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+  ctx.stroke();
+}
+
+// ── 细线悬挂 ──
+function drawString(cx, cy, ry, alpha) {
+  const startY = cy + ry;
+  const endY = H * 0.92;
+  ctx.strokeStyle = `rgba(60,70,80,${alpha * 0.5})`;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(cx, startY);
+  // 微弧线
+  ctx.bezierCurveTo(cx + S * 0.005, startY + (endY - startY) * 0.3,
+                     cx - S * 0.003, startY + (endY - startY) * 0.7,
+                     cx, endY);
+  ctx.stroke();
+}
+
+// ── 线框3D地形网格 ──
+function drawWireframe(cx, cy, rx, ry, t, alpha) {
+  ctx.strokeStyle = `rgba(160,180,210,${alpha * 0.4})`;
+  ctx.lineWidth = 0.6;
+
+  const cols = 16, rows = 12;
+  // 水平线（带3D起伏）
+  for (let r = 0; r < rows; r++) {
+    const v = r / (rows - 1) * 2 - 1; // -1~1
+    ctx.beginPath();
+    for (let c = 0; c <= cols; c++) {
+      const u = c / cols * 2 - 1; // -1~1
+      // 椭圆内判定
+      const eu = u / 1;
+      const ev = v / 1;
+      if (eu * eu + ev * ev > 1) continue;
+
+      // 3D高度（波纹）
+      const wave = Math.sin(u * 3 + t * 0.02) * Math.cos(v * 2.5 + t * 0.015) * 0.12;
+      const x = cx + u * rx;
+      const y = cy + v * ry - wave * ry;
+
+      if (c === 0 || eu * eu + ev * ev > 0.95) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
     }
-  `,
-  fragmentShader:`
-    varying vec3 vColor;
-    void main(){
-      float d = distance(gl_PointCoord, vec2(0.5));
-      float alpha = smoothstep(0.5, 0.1, d);
-      gl_FragColor = vec4(vColor, alpha * 0.7);
+    ctx.stroke();
+  }
+
+  // 垂直线
+  for (let c = 0; c <= cols; c++) {
+    const u = c / cols * 2 - 1;
+    ctx.beginPath();
+    for (let r = 0; r < rows; r++) {
+      const v = r / (rows - 1) * 2 - 1;
+      const eu = u / 1;
+      const ev = v / 1;
+      if (eu * eu + ev * ev > 1) continue;
+
+      const wave = Math.sin(u * 3 + t * 0.02) * Math.cos(v * 2.5 + t * 0.015) * 0.12;
+      const x = cx + u * rx;
+      const y = cy + v * ry - wave * ry;
+
+      if (r === 0 || eu * eu + ev * ev > 0.95) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
     }
-  `
-});
-const stars = new THREE.Points(starGeo, starMat);
-scene.add(stars);
-
-// ── 捕梦网：3D结构 ──
-const netGroup = new THREE.Group();
-scene.add(netGroup);
-
-// 外环
-const ringGeo = new THREE.TorusGeometry(3, 0.04, 8, 64);
-const ringMat = new THREE.MeshBasicMaterial({color: 0xccaa66});
-const ring = new THREE.Mesh(ringGeo, ringMat);
-netGroup.add(ring);
-
-// 内部编织网（螺旋线）
-const webMat = new THREE.LineBasicMaterial({color: 0x887744, transparent: true, opacity: 0.6});
-const spirals = 8;
-for (let s = 0; s < spirals; s++) {
-  const pts = [];
-  const baseAngle = (s / spirals) * Math.PI * 2;
-  for (let t = 0; t <= 1; t += 0.02) {
-    const r = 3 * (1 - t * 0.92);
-    const a = baseAngle + t * Math.PI * 3;
-    pts.push(new THREE.Vector3(Math.cos(a) * r, Math.sin(a) * r, t * 0.3));
+    ctx.stroke();
   }
-  const geo = new THREE.BufferGeometry().setFromPoints(pts);
-  netGroup.add(new THREE.Line(geo, webMat));
 }
 
-// 同心环
-for (let i = 1; i <= 6; i++) {
-  const r = 3 * (1 - i * 0.13);
-  const pts = [];
-  for (let a = 0; a <= Math.PI * 2; a += 0.08) {
-    pts.push(new THREE.Vector3(Math.cos(a) * r, Math.sin(a) * r, i * 0.04));
+// ── 网兜网格（phase3可见）──
+function drawNetMesh(cx, cy, rx, ry, alpha) {
+  ctx.strokeStyle = `rgba(80,100,80,${alpha * 0.2})`;
+  ctx.lineWidth = 0.4;
+  const segs = 12;
+  for (let i = 0; i < segs; i++) {
+    const u = i / segs * 2 - 1;
+    ctx.beginPath();
+    for (let j = 0; j <= 20; j++) {
+      const v = j / 20 * 2 - 1;
+      if (u*u + v*v > 1) continue;
+      const x = cx + u * rx;
+      const y = cy + v * ry;
+      j === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
   }
-  pts.push(pts[0].clone());
-  const geo = new THREE.BufferGeometry().setFromPoints(pts);
-  netGroup.add(new THREE.Line(geo, webMat));
+  for (let j = 0; j < segs; j++) {
+    const v = j / segs * 2 - 1;
+    ctx.beginPath();
+    for (let i = 0; i <= 20; i++) {
+      const u = i / 20 * 2 - 1;
+      if (u*u + v*v > 1) continue;
+      const x = cx + u * rx;
+      const y = cy + v * ry;
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+  }
 }
 
-// 挂绳
-const ropePts = [new THREE.Vector3(0, 3, 0), new THREE.Vector3(0, 6, 0)];
-const ropeGeo = new THREE.BufferGeometry().setFromPoints(ropePts);
-netGroup.add(new THREE.Line(ropeGeo, new THREE.LineBasicMaterial({color:0x886644})));
+// ── 小花 ──
+function drawFlower(x, y, size, type, bloom) {
+  if (bloom <= 0) return;
+  const sz = size * S * bloom;
 
-// 垂饰（4条）
-for (let i = 0; i < 4; i++) {
-  const angle = -Math.PI/2 + (i - 1.5) * 0.35;
-  const x = Math.cos(angle) * 2.8;
-  const y = Math.sin(angle) * 2.8;
-  const len = 1.5 + Math.random() * 1.5;
-  const pts2 = [new THREE.Vector3(x, y, 0)];
-  for (let j = 1; j <= 5; j++) {
-    pts2.push(new THREE.Vector3(x + Math.sin(j * 0.5) * 0.15, y - j * len/5, j * 0.05));
+  ctx.save();
+  ctx.translate(x, y);
+
+  const petalCount = type === 1 ? 8 : 6;
+  for (let i = 0; i < petalCount; i++) {
+    const a = (i / petalCount) * Math.PI * 2;
+    const px = Math.cos(a) * sz * 0.6;
+    const py = Math.sin(a) * sz * 0.6;
+
+    ctx.beginPath();
+    ctx.ellipse(px, py, sz * 0.45, sz * 0.28, a, 0, Math.PI * 2);
+
+    if (type === 0) ctx.fillStyle = `rgba(240,170,180,${0.8 * bloom})`; // 粉
+    else if (type === 1) ctx.fillStyle = `rgba(240,220,90,${0.85 * bloom})`; // 黄
+    else ctx.fillStyle = `rgba(245,240,235,${0.8 * bloom})`; // 白
+    ctx.fill();
   }
-  const geo2 = new THREE.BufferGeometry().setFromPoints(pts2);
-  netGroup.add(new THREE.Line(geo2, new THREE.LineBasicMaterial({color:0x886644, transparent:true, opacity:0.5})));
-  
-  // 珠子
-  const beadGeo = new THREE.SphereGeometry(0.08, 8, 8);
-  const beadMat = new THREE.MeshBasicMaterial({color: [0xffd700, 0xccaaff, 0xffffff][i%3]});
-  const bead = new THREE.Mesh(beadGeo, beadMat);
-  bead.position.set(pts2[3].x, pts2[3].y, pts2[3].z);
-  netGroup.add(bead);
 
-  // 羽毛（简化为扁椭圆）
-  const featherGeo = new THREE.PlaneGeometry(0.25, 0.8, 1, 4);
-  const featherMat = new THREE.MeshBasicMaterial({
-    color: [0xeeddaa, 0xccbbdd, 0xddccaa][i%3],
-    transparent:true, opacity:0.5, side: THREE.DoubleSide
+  // 花心
+  ctx.beginPath();
+  ctx.arc(0, 0, sz * 0.2, 0, Math.PI * 2);
+  if (type === 0) ctx.fillStyle = `rgba(220,180,60,${bloom})`;
+  else if (type === 1) ctx.fillStyle = `rgba(180,80,50,${bloom})`;
+  else ctx.fillStyle = `rgba(220,200,100,${bloom})`;
+  ctx.fill();
+
+  ctx.restore();
+}
+
+// ── 绿叶 ──
+function drawLeaf(x, y, size, rot, alpha) {
+  if (alpha <= 0) return;
+  const sz = size * S;
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(rot);
+  ctx.fillStyle = `rgba(80,170,80,${0.7 * alpha})`;
+  ctx.beginPath();
+  ctx.ellipse(0, 0, sz * 1.5, sz * 0.6, 0, 0, Math.PI * 2);
+  ctx.fill();
+  // 叶脉
+  ctx.strokeStyle = `rgba(60,130,60,${0.4 * alpha})`;
+  ctx.lineWidth = 0.5;
+  ctx.beginPath();
+  ctx.moveTo(-sz * 1.3, 0); ctx.lineTo(sz * 1.3, 0);
+  ctx.stroke();
+  ctx.restore();
+}
+
+// ── 飘散花瓣 ──
+function spawnPetal(cx, cy, rx, ry) {
+  const angle = Math.random() * Math.PI * 2;
+  const r = Math.random() * 0.7;
+  PETALS.push({
+    x: cx + Math.cos(angle) * r * rx,
+    y: cy + Math.sin(angle) * r * ry,
+    vx: (Math.random() - 0.5) * 1.5,
+    vy: -0.5 - Math.random() * 1.5,
+    rot: Math.random() * Math.PI * 2,
+    vr: (Math.random() - 0.5) * 0.05,
+    size: 3 + Math.random() * 5,
+    life: 1,
+    type: Math.floor(Math.random() * 3),
   });
-  const feather = new THREE.Mesh(featherGeo, featherMat);
-  feather.position.copy(pts2[pts2.length-1]);
-  feather.rotation.z = Math.random() * 0.4 - 0.2;
-  netGroup.add(feather);
 }
 
-// ── 梦境粒子（从四方汇聚）──
-const dreamCount = 200;
-const dreamGeo = new THREE.BufferGeometry();
-const dreamPos = new Float32Array(dreamCount * 3);
-const dreamVel = new Float32Array(dreamCount * 3);
-const dreamLife = new Float32Array(dreamCount);
-const dreamColors = new Float32Array(dreamCount * 3);
-
-function resetDream(i) {
-  const theta = Math.random() * Math.PI * 2;
-  const phi = Math.acos(2 * Math.random() - 1);
-  const r = 15 + Math.random() * 25;
-  dreamPos[i*3]   = r * Math.sin(phi) * Math.cos(theta);
-  dreamPos[i*3+1] = r * Math.sin(phi) * Math.sin(theta);
-  dreamPos[i*3+2] = r * Math.cos(phi);
-  dreamLife[i] = 1;
-  const p = [[1,0.85,0.3],[0.85,0.9,1],[0.6,0.4,0.85]][Math.floor(Math.random()*3)];
-  dreamColors[i*3]=p[0]; dreamColors[i*3+1]=p[1]; dreamColors[i*3+2]=p[2];
-}
-for (let i = 0; i < dreamCount; i++) resetDream(i);
-dreamGeo.setAttribute('position', new THREE.BufferAttribute(dreamPos, 3));
-dreamGeo.setAttribute('color', new THREE.BufferAttribute(dreamColors, 3));
-
-const dreamMat = new THREE.PointsMaterial({
-  size: 0.15, vertexColors: true, transparent: true, opacity: 0.8,
-  blending: THREE.AdditiveBlending, depthWrite: false,
-});
-const dreams = new THREE.Points(dreamGeo, dreamMat);
-scene.add(dreams);
-
-// ── 文字精灵 ──
-const textWords = ['捕一场旧梦', '网住月光', '放走星辰', '夜风轻语', '星河入梦'];
-const textSprites = [];
-
-function makeTextSprite(text) {
-  const cvs = document.createElement('canvas');
-  cvs.width = 256; cvs.height = 64;
-  const c = cvs.getContext('2d');
-  c.font = '28px "STKaiti","KaiTi",serif';
-  c.fillStyle = 'rgba(220,200,150,0.8)';
-  c.textAlign = 'center'; c.textBaseline = 'middle';
-  c.fillText(text, 128, 32);
-  const tex = new THREE.CanvasTexture(cvs);
-  const mat = new THREE.SpriteMaterial({map:tex, transparent:true, blending: THREE.AdditiveBlending, depthWrite:false});
-  const sp = new THREE.Sprite(mat);
-  sp.scale.set(4, 1, 1);
-  return sp;
+function drawPetal(p) {
+  ctx.save();
+  ctx.translate(p.x, p.y);
+  ctx.rotate(p.rot);
+  ctx.globalAlpha = p.life * 0.7;
+  const colors = ['rgba(240,170,180,0.8)', 'rgba(240,220,90,0.8)', 'rgba(245,240,235,0.8)'];
+  ctx.fillStyle = colors[p.type];
+  ctx.beginPath();
+  ctx.ellipse(0, 0, p.size, p.size * 0.5, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.globalAlpha = 1;
+  ctx.restore();
 }
 
-function spawnText() {
-  const word = textWords[Math.floor(Math.random() * textWords.length)];
-  const sp = makeTextSprite(word);
-  const theta = Math.random() * Math.PI * 2;
-  const r = 12 + Math.random() * 10;
-  sp.position.set(Math.cos(theta)*r, (Math.random()-0.5)*6, Math.sin(theta)*r);
-  sp.userData = {life: 1, vel: new THREE.Vector3(-sp.position.x, -sp.position.y, -sp.position.z).normalize().multiplyScalar(0.02)};
-  scene.add(sp);
-  textSprites.push(sp);
-}
+// ── 诗句排版 ──
+function drawPoem(alpha) {
+  if (alpha <= 0) return;
+  const fontSize = S * 0.028;
+  ctx.font = `400 ${fontSize}px "STKaiti","KaiTi","Songti SC","PingFang SC",serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
 
-// ── 发光环效果（捕梦网中心）──
-const glowRingGeo = new THREE.RingGeometry(2.5, 3.1, 64);
-const glowRingMat = new THREE.ShaderMaterial({
-  transparent:true, side:THREE.DoubleSide, depthWrite:false,
-  uniforms:{time:{value:0}},
-  vertexShader:`varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
-  fragmentShader:`
-    uniform float time;
-    varying vec2 vUv;
-    void main(){
-      float glow = sin(vUv.x * 30.0 + time * 3.0) * 0.5 + 0.5;
-      gl_FragColor = vec4(0.8, 0.7, 0.3, glow * 0.25);
+  const startY = H * 0.06;
+  const lineH = fontSize * 1.8;
+
+  for (let i = 0; i < POEM_LINES.length; i++) {
+    const line = POEM_LINES[i];
+    if (!line) continue;
+
+    const isAuthor = line.startsWith('—');
+    const y = startY + i * lineH;
+    const delay = i * 0.08;
+
+    // 逐行淡入
+    const lineAlpha = Math.max(0, Math.min(1, (alpha - delay) * 3));
+    if (lineAlpha <= 0) continue;
+
+    if (isAuthor) {
+      ctx.font = `300 ${fontSize * 0.75}px "STKaiti","KaiTi","Songti SC",serif`;
+      ctx.fillStyle = `rgba(120,130,140,${lineAlpha * 0.5})`;
+    } else {
+      ctx.font = `400 ${fontSize}px "STKaiti","KaiTi","Songti SC","PingFang SC",serif`;
+      ctx.fillStyle = `rgba(40,45,50,${lineAlpha * 0.75})`;
     }
-  `
-});
-const glowRing = new THREE.Mesh(glowRingGeo, glowRingMat);
-glowRing.position.z = 0.1;
-netGroup.add(glowRing);
-
-// ── 动画 ──
-function animate() {
-  requestAnimationFrame(animate);
-  time += 0.012;
-
-  // 捕梦网轻摆
-  const sway = Math.sin(time * 0.5) * 0.08;
-  netGroup.rotation.z = sway;
-  netGroup.rotation.x = Math.sin(time * 0.3) * 0.03 + mouseY * 0.1;
-  netGroup.rotation.y = Math.cos(time * 0.4) * 0.03 + mouseX * 0.15;
-
-  // 星空缓旋
-  stars.rotation.y = time * 0.01;
-  stars.rotation.x = time * 0.005;
-  starMat.uniforms.time.value = time;
-
-  // 发光环
-  glowRingMat.uniforms.time.value = time;
-
-  // 梦境粒子向捕梦网汇聚
-  for (let i = 0; i < dreamCount; i++) {
-    const dx = -dreamPos[i*3];
-    const dy = -dreamPos[i*3+1];
-    const dz = -dreamPos[i*3+2];
-    const dist = Math.sqrt(dx*dx + dy*dy + dz*dz);
-    const speed = 0.03;
-    dreamPos[i*3]   += dx / dist * speed;
-    dreamPos[i*3+1] += dy / dist * speed;
-    dreamPos[i*3+2] += dz / dist * speed;
-    
-    // 到达捕梦网附近：被捕获或穿过
-    if (dist < 3.5) {
-      dreamLife[i] -= 0.02;
-      if (dreamLife[i] <= 0) resetDream(i);
-    }
+    ctx.fillText(line, W * 0.5, y);
   }
-  dreamGeo.attributes.position.needsUpdate = true;
+}
 
-  // 文字粒子
-  if (Math.random() < 0.008) spawnText();
-  for (let i = textSprites.length - 1; i >= 0; i--) {
-    const sp = textSprites[i];
-    sp.position.add(sp.userData.vel);
-    sp.userData.life -= 0.003;
-    sp.material.opacity = sp.userData.life * 0.6;
-    if (sp.userData.life <= 0) {
-      scene.remove(sp); sp.material.map.dispose(); sp.material.dispose();
-      textSprites.splice(i, 1);
-    }
+// ── 小黄花（phase2单朵标志花）──
+function drawIconFlower(x, y, size, bloom) {
+  if (bloom <= 0) return;
+  ctx.save();
+  ctx.translate(x, y);
+  const sz = size * bloom;
+  // 5片黄色花瓣
+  for (let i = 0; i < 5; i++) {
+    const a = (i / 5) * Math.PI * 2 - Math.PI / 2;
+    ctx.fillStyle = `rgba(240,210,60,${0.85 * bloom})`;
+    ctx.beginPath();
+    ctx.ellipse(Math.cos(a) * sz * 0.5, Math.sin(a) * sz * 0.5,
+                sz * 0.35, sz * 0.2, a, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  // 红心
+  ctx.fillStyle = `rgba(200,70,50,${bloom})`;
+  ctx.beginPath();
+  ctx.arc(0, 0, sz * 0.18, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+// ── 主循环 ──
+function draw() {
+  requestAnimationFrame(draw);
+  time++;
+  cycleFrame = time % TOTAL_CYCLE;
+
+  // 计算当前阶段和过渡
+  const seg = PHASE_DURATION + TRANSITION;
+  if (cycleFrame < PHASE_DURATION) {
+    phase = 0; phaseSmooth = 0;
+  } else if (cycleFrame < seg) {
+    phase = 0;
+    phaseSmooth = (cycleFrame - PHASE_DURATION) / TRANSITION; // 0→1过渡
+  } else if (cycleFrame < seg + PHASE_DURATION) {
+    phase = 1; phaseSmooth = 1;
+  } else if (cycleFrame < seg * 2) {
+    phase = 1;
+    phaseSmooth = 1 + (cycleFrame - seg - PHASE_DURATION) / TRANSITION; // 1→2
+  } else if (cycleFrame < seg * 2 + PHASE_DURATION) {
+    phase = 2; phaseSmooth = 2;
+  } else {
+    phase = 2;
+    phaseSmooth = 2 + (cycleFrame - seg * 2 - PHASE_DURATION) / TRANSITION; // 2→0回归
+    if (phaseSmooth > 2.99) phaseSmooth = 0;
   }
 
-  // 相机微动
-  camera.position.x += (mouseX * 2 - camera.position.x) * 0.02;
-  camera.position.y += (mouseY * 1.5 - camera.position.y) * 0.02;
-  camera.lookAt(0, 0, 0);
+  // 三阶段权重
+  const w1 = Math.max(0, 1 - Math.abs(phaseSmooth));         // phase1: 0附近=1
+  const w2 = Math.max(0, 1 - Math.abs(phaseSmooth - 1));     // phase2: 1附近=1
+  const w3 = Math.max(0, 1 - Math.abs(phaseSmooth - 2));     // phase3: 2附近=1
+  // 回归过渡（2→0）
+  const wReturn = phaseSmooth > 2 ? (phaseSmooth - 2) : 0;
+  const w1eff = Math.min(1, w1 + wReturn);
 
-  renderer.render(scene, camera);
+  // ── 清屏 ──
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, W, H);
+
+  // ── 方格纸 ──
+  drawGrid();
+
+  // ── 中心椭圆参数 ──
+  const cx = W * 0.5;
+  const cy = H * 0.48;
+  const rx = S * 0.2;
+  const ry = S * 0.28;
+
+  // ── Phase 1: 蓝色椭圆气球 ──
+  if (w1eff > 0.01) {
+    // 蓝色填充
+    const grad = ctx.createRadialGradient(cx, cy - ry * 0.2, 0, cx, cy, ry);
+    grad.addColorStop(0, `rgba(190,215,240,${w1eff * 0.15})`);
+    grad.addColorStop(0.7, `rgba(160,195,230,${w1eff * 0.08})`);
+    grad.addColorStop(1, `rgba(140,180,220,${w1eff * 0.02})`);
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    drawBalloonOutline(cx, cy, rx, ry, w1eff * 0.6, `rgba(140,180,220,${w1eff * 0.6})`);
+    drawString(cx, cy, ry, w1eff);
+  }
+
+  // ── Phase 2: 线框3D地形 ──
+  if (w2 > 0.01) {
+    drawWireframe(cx, cy, rx, ry, time, w2);
+
+    // 蓝色椭圆轮廓（放大镜感）
+    drawBalloonOutline(cx, cy, rx * 1.05, ry * 1.05, w2 * 0.4,
+                       `rgba(100,150,210,${w2 * 0.4})`);
+    drawString(cx, cy, ry * 1.05, w2);
+
+    // 散落绿点
+    for (const d of GREEN_DOTS) {
+      const dotAlpha = w2 * 0.5 * (0.5 + Math.sin(time * 0.03 + d.phase) * 0.5);
+      if (dotAlpha < 0.05) continue;
+      const dx = cx + d.ox * rx;
+      const dy = cy + d.oy * ry;
+      ctx.fillStyle = `rgba(80,170,80,${dotAlpha})`;
+      ctx.beginPath();
+      ctx.arc(dx, dy, d.size * S, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // 小黄花（标志性单朵）
+    const iconBloom = Math.max(0, w2 * 1.5 - 0.3);
+    drawIconFlower(cx + rx * 0.15, cy - ry * 0.1, S * 0.015, Math.min(1, iconBloom));
+
+    // 小茎
+    if (iconBloom > 0) {
+      ctx.strokeStyle = `rgba(60,120,60,${Math.min(1, iconBloom) * 0.5})`;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(cx + rx * 0.15, cy - ry * 0.1 + S * 0.015);
+      ctx.lineTo(cx + rx * 0.15, cy + ry * 0.05);
+      ctx.stroke();
+    }
+  }
+
+  // ── Phase 3: 花覆盖的网兜 ──
+  if (w3 > 0.01) {
+    // 淡网兜网格
+    drawNetMesh(cx, cy, rx, ry, w3);
+    drawString(cx, cy, ry, w3);
+
+    // 绿叶
+    for (const lf of LEAVES) {
+      const leafAlpha = w3 * Math.max(0, (phaseSmooth - 1.5) * 2);
+      const lx = cx + lf.ox * rx;
+      const ly = cy + lf.oy * ry;
+      drawLeaf(lx, ly, lf.size, lf.rot + Math.sin(time * 0.02 + lf.phase) * 0.1, leafAlpha);
+    }
+
+    // 花朵逐朵绽放
+    for (const f of FLOWERS) {
+      const bloomProgress = Math.max(0, Math.min(1, (w3 - f.bloomDelay * 0.6) * 2.5));
+      const fx = cx + f.ox * rx;
+      const fy = cy + f.oy * ry;
+      drawFlower(fx, fy, f.size, f.type, bloomProgress);
+    }
+
+    // 花瓣飘散
+    if (w3 > 0.5 && Math.random() < 0.08) {
+      spawnPetal(cx, cy, rx, ry);
+    }
+  }
+
+  // 飘散花瓣（独立于phase，一旦生成就自由飘动）
+  for (let i = PETALS.length - 1; i >= 0; i--) {
+    const p = PETALS[i];
+    p.x += p.vx;
+    p.y += p.vy;
+    p.vy += 0.02; // 重力
+    p.vx += (Math.random() - 0.5) * 0.1; // 随风
+    p.rot += p.vr;
+    p.life -= 0.005;
+    if (p.life <= 0 || p.y > H + 20) {
+      PETALS.splice(i, 1); continue;
+    }
+    drawPetal(p);
+  }
+
+  // ── 诗句（始终可见，但alpha随阶段微变）──
+  const poemAlpha = 0.6 + w3 * 0.4; // phase3时更清晰
+  drawPoem(poemAlpha);
+
+  // ── 阶段指示点（底部三个小圆）──
+  const dotR = 3;
+  const dotY = H * 0.96;
+  const dotGap = 16;
+  for (let i = 0; i < 3; i++) {
+    const dx = cx + (i - 1) * dotGap;
+    const isActive = Math.round(phaseSmooth) === i || (phaseSmooth > 2.5 && i === 0);
+    ctx.fillStyle = isActive ? 'rgba(60,70,80,0.6)' : 'rgba(180,190,200,0.4)';
+    ctx.beginPath();
+    ctx.arc(dx, dotY, dotR, 0, Math.PI * 2);
+    ctx.fill();
+  }
 }
 
-// ── 事件 ──
-window.addEventListener('mousemove', e => {
-  mouseX = (e.clientX / W - 0.5) * 2;
-  mouseY = (e.clientY / H - 0.5) * 2;
-});
-window.addEventListener('touchmove', e => {
-  e.preventDefault();
-  mouseX = (e.touches[0].clientX / W - 0.5) * 2;
-  mouseY = (e.touches[0].clientY / H - 0.5) * 2;
-}, {passive:false});
-window.addEventListener('resize', () => {
-  W = window.innerWidth; H = window.innerHeight;
-  camera.aspect = W/H; camera.updateProjectionMatrix();
-  renderer.setSize(W, H);
+// 事件
+window.addEventListener('touchmove', e => e.preventDefault(), {passive:false});
+// 点击可跳转阶段
+window.addEventListener('click', () => {
+  // 快进到下一阶段
+  const seg = PHASE_DURATION + TRANSITION;
+  const currentPhase = Math.floor(cycleFrame / seg);
+  const nextPhase = (currentPhase + 1) % 3;
+  // 直接设置time让cycleFrame跳转
+  const targetFrame = nextPhase * seg;
+  time = time - cycleFrame + targetFrame;
 });
 
-animate();
+draw();
 </script>
 </body>
 </html>
