@@ -1,380 +1,234 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>旧梦 - Old Dream</title>
-    <style>
-        body {
-            margin: 0;
-            padding: 0;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            background: #0a0a15;
-            font-family: 'STKaiti', 'KaiTi', serif;
-            overflow: hidden; touch-action: none;
-        }
-        canvas {
-            display: block;
-            box-shadow: 0 0 60px rgba(100, 80, 150, 0.4);
-        }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no">
+<title>旧梦 · Old Dream</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0a0818;overflow:hidden;touch-action:none}
+canvas{display:block;position:fixed;top:0;left:0}
+</style>
 </head>
 <body>
-    <canvas id="canvas"></canvas>
-    <script>
-        const canvas = document.getElementById('canvas');
-        const ctx = canvas.getContext('2d');
-        
-        // 画布尺寸
-        canvas.width = window.innerWidth;
-        canvas.height = window.innerHeight;
-        
-        // 鼠标位置
-        let mouseX = -1000;
-        let mouseY = -1000;
-        
-        canvas.addEventListener('mousemove', (e) => {
-            const rect = canvas.getBoundingClientRect();
-            mouseX = e.clientX - rect.left;
-            mouseY = e.clientY - rect.top;
-        });
-        
-        canvas.addEventListener('mouseleave', () => {
-            mouseX = -1000;
-            mouseY = -1000;
-        });
-        
-        // 触摸支持
-        canvas.addEventListener('touchstart', (e) => {
-            e.preventDefault();
-            const touch = e.touches[0];
-            const rect = canvas.getBoundingClientRect();
-            mouseX = touch.clientX - rect.left;
-            mouseY = touch.clientY - rect.top;
-        });
-        canvas.addEventListener('touchmove', (e) => {
-            e.preventDefault();
-            const touch = e.touches[0];
-            const rect = canvas.getBoundingClientRect();
-            mouseX = touch.clientX - rect.left;
-            mouseY = touch.clientY - rect.top;
-        });
-        canvas.addEventListener('touchend', () => {
-            mouseX = -1000;
-            mouseY = -1000;
-        });
-        
-        // 诗句文本
-        const poem = [
-            '旧梦如烟',
-            '散作满天星',
-            '你来过',
-            '却又走了',
-            '留一地月光'
-        ];
-        
-        // 光环粒子类
-        class LightRing {
-            constructor() {
-                this.x = Math.random() * canvas.width;
-                this.y = Math.random() * canvas.height;
-                this.radius = 40 + Math.random() * 60;
-                this.speed = 0.2 + Math.random() * 0.3;
-                this.angle = Math.random() * Math.PI * 2;
-                this.opacity = 0.1 + Math.random() * 0.2;
-                this.hue = Math.random() * 60 + 30; // 暖金到琥珀色
-            }
-            
-            update() {
-                this.angle += 0.001;
-                this.x += Math.cos(this.angle) * this.speed;
-                this.y += Math.sin(this.angle) * this.speed;
-                
-                // 边界循环
-                if (this.x < -100) this.x = canvas.width + 100;
-                if (this.x > canvas.width + 100) this.x = -100;
-                if (this.y < -100) this.y = canvas.height + 100;
-                if (this.y > canvas.height + 100) this.y = -100;
-            }
-            
-            draw() {
-                const gradient = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, this.radius);
-                gradient.addColorStop(0, `hsla(${this.hue}, 70%, 60%, ${this.opacity})`);
-                gradient.addColorStop(0.5, `hsla(${this.hue}, 70%, 50%, ${this.opacity * 0.3})`);
-                gradient.addColorStop(1, 'transparent');
-                
-                ctx.fillStyle = gradient;
-                ctx.fillRect(this.x - this.radius, this.y - this.radius, this.radius * 2, this.radius * 2);
-            }
-        }
-        
-        // 漂浮粒子类
-        class Particle {
-            constructor(x, y, isText = false) {
-                this.x = x || Math.random() * canvas.width;
-                this.y = y || Math.random() * canvas.height;
-                this.size = isText ? 2 + Math.random() * 3 : 1 + Math.random() * 2;
-                this.speedX = (Math.random() - 0.5) * 0.5;
-                this.speedY = (Math.random() - 0.5) * 0.5;
-                this.opacity = 0.3 + Math.random() * 0.7;
-                this.color = isText ? 
-                    (Math.random() > 0.5 ? '#ffd88e' : '#e8b4ff') : 
-                    ['#ffd88e', '#ffaa66', '#e8b4ff'][Math.floor(Math.random() * 3)];
-                this.blur = 4 + Math.random() * 6;
-                this.life = isText ? 0 : 1;
-                this.maxLife = 180 + Math.random() * 120;
-            }
-            
-            update() {
-                // 鼠标排斥效果
-                const dx = this.x - mouseX;
-                const dy = this.y - mouseY;
-                const dist = Math.sqrt(dx * dx + dy * dy);
-                
-                if (dist < 100) {
-                    const force = (100 - dist) / 100;
-                    this.speedX += (dx / dist) * force * 0.5;
-                    this.speedY += (dy / dist) * force * 0.5;
-                }
-                
-                this.x += this.speedX;
-                this.y += this.speedY;
-                
-                // 速度衰减
-                this.speedX *= 0.98;
-                this.speedY *= 0.98;
-                
-                // 边界循环
-                if (this.x < 0) this.x = canvas.width;
-                if (this.x > canvas.width) this.x = 0;
-                if (this.y < 0) this.y = canvas.height;
-                if (this.y > canvas.height) this.y = 0;
-                
-                // 生命周期
-                this.life++;
-                if (this.life > this.maxLife * 0.7) {
-                    this.opacity *= 0.98;
-                }
-            }
-            
-            draw() {
-                ctx.save();
-                ctx.shadowBlur = this.blur;
-                ctx.shadowColor = this.color;
-                ctx.globalAlpha = this.opacity;
-                ctx.fillStyle = this.color;
-                ctx.beginPath();
-                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
-                ctx.fill();
-                ctx.restore();
-            }
-            
-            isDead() {
-                return this.opacity < 0.01 || this.life > this.maxLife;
-            }
-        }
-        
-        // 文字字符类
-        class TextChar {
-            constructor(char, x, y, delay) {
-                this.char = char;
-                this.x = x;
-                this.y = y;
-                this.delay = delay;
-                this.opacity = 0;
-                this.phase = 'fadein'; // fadein, hold, dissolve
-                this.timer = 0;
-                this.holdTime = 120;
-                this.dissolveParticles = [];
-            }
-            
-            update() {
-                this.timer++;
-                
-                if (this.timer < this.delay) return;
-                
-                const t = this.timer - this.delay;
-                
-                if (this.phase === 'fadein') {
-                    this.opacity = Math.min(1, t / 60);
-                    if (this.opacity >= 1) {
-                        this.phase = 'hold';
-                        this.timer = 0;
-                    }
-                } else if (this.phase === 'hold') {
-                    if (this.timer > this.holdTime) {
-                        this.phase = 'dissolve';
-                        this.createDissolveParticles();
-                    }
-                } else if (this.phase === 'dissolve') {
-                    this.opacity = Math.max(0, 1 - this.timer / 60);
-                    this.dissolveParticles.forEach(p => p.update());
-                    this.dissolveParticles = this.dissolveParticles.filter(p => !p.isDead());
-                }
-            }
-            
-            createDissolveParticles() {
-                const count = 15 + Math.random() * 10;
-                for (let i = 0; i < count; i++) {
-                    const angle = Math.random() * Math.PI * 2;
-                    const speed = 0.5 + Math.random() * 1.5;
-                    const p = new Particle(this.x, this.y, true);
-                    p.speedX = Math.cos(angle) * speed;
-                    p.speedY = Math.sin(angle) * speed;
-                    this.dissolveParticles.push(p);
-                }
-            }
-            
-            draw() {
-                if (this.timer < this.delay) return;
-                
-                // 绘制原字符
-                if (this.opacity > 0) {
-                    ctx.save();
-                    ctx.globalAlpha = this.opacity;
-                    ctx.fillStyle = '#ffe4b8';
-                    ctx.font = '32px STKaiti, KaiTi, serif';
-                    ctx.textAlign = 'center';
-                    ctx.textBaseline = 'middle';
-                    ctx.shadowBlur = 15;
-                    ctx.shadowColor = '#ffd88e';
-                    ctx.fillText(this.char, this.x, this.y);
-                    ctx.restore();
-                }
-                
-                // 绘制溶解粒子
-                this.dissolveParticles.forEach(p => p.draw());
-            }
-            
-            isDone() {
-                return this.phase === 'dissolve' && this.opacity <= 0 && this.dissolveParticles.length === 0;
-            }
-        }
-        
-        // 初始化
-        const lightRings = [];
-        for (let i = 0; i < 8; i++) {
-            lightRings.push(new LightRing());
-        }
-        
-        const particles = [];
-        for (let i = 0; i < 120; i++) {
-            particles.push(new Particle());
-        }
-        
-        let textChars = [];
-        let cycleTimer = 0;
-        const cycleDuration = 1200; // 完整循环时长
-        
-        function initText() {
-            textChars = [];
-            let charIndex = 0;
-            
-            poem.forEach((line, lineIndex) => {
-                const y = 200 + lineIndex * 70;
-                const chars = line.split('');
-                const totalWidth = chars.length * 35;
-                const startX = (canvas.width - totalWidth) / 2 + 17;
-                
-                chars.forEach((char, i) => {
-                    textChars.push(new TextChar(
-                        char,
-                        startX + i * 35,
-                        y,
-                        charIndex * 8
-                    ));
-                    charIndex++;
-                });
-            });
-        }
-        
-        initText();
-        
-        // 动画循环
-        function animate() {
-            // 背景渐变（深蓝到暗紫）
-            const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
-            gradient.addColorStop(0, '#0f0a2e');
-            gradient.addColorStop(0.5, '#1a0f3a');
-            gradient.addColorStop(1, '#0a0618');
-            ctx.fillStyle = gradient;
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            
-            // 绘制光环
-            lightRings.forEach(ring => {
-                ring.update();
-                ring.draw();
-            });
-            
-            // 绘制粒子
-            particles.forEach((p, index) => {
-                p.update();
-                p.draw();
-                
-                if (p.isDead()) {
-                    particles[index] = new Particle();
-                }
-            });
-            
-            // 绘制文字
-            textChars.forEach(tc => {
-                tc.update();
-                tc.draw();
-            });
-            
-            // 循环控制
-            cycleTimer++;
-            if (cycleTimer > cycleDuration) {
-                if (textChars.every(tc => tc.isDone())) {
-                    cycleTimer = 0;
-                    initText();
-                }
-            }
-            
-            requestAnimationFrame(animate);
-        }
-        
-        // Resize 监听
-        window.addEventListener('resize', () => {
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
-            initText();
-        });
-        animate();
-    </script>
-
+<canvas id="c"></canvas>
 <script>
-// Generated Audio System - 梦境pad
-// 梦境pad音效
-let ctx, master, isActive=false;
-function initAudio(){
-  if(ctx) return;
-  ctx=new(AudioContext||webkitAudioContext)();
-  master=ctx.createGain();master.gain.value=0.15;master.connect(ctx.destination);
-  
-  const freqs=[174.61,220,261.63,329.63];
-  freqs.forEach((f,i)=>{
-    const o=ctx.createOscillator(),g=ctx.createGain();
-    const lfo=ctx.createOscillator(),lfog=ctx.createGain();
-    o.frequency.value=f;o.type='sine';
-    lfo.frequency.value=0.25+i*0.15;lfog.gain.value=3;
-    lfo.connect(lfog);lfog.connect(o.frequency);
-    g.gain.value=0.06/(i+1);
-    o.connect(g);g.connect(master);o.start();lfo.start();
-  });
-  isActive=true;
+// ══════════════════════════════════════════
+//  旧梦 — 透纳（Turner）光雾风格
+//  金色光晕弥漫，诗句如蒲公英种子飘散
+// ══════════════════════════════════════════
+const C = document.getElementById('c');
+const ctx = C.getContext('2d');
+let W, H, time = 0;
+let mouseX = -1, mouseY = -1;
+
+function resize() {
+  W = C.width = innerWidth; H = C.height = innerHeight;
 }
-const btn=document.createElement('button');
-btn.innerHTML='🔊';
-btn.style.cssText='position:fixed;bottom:24px;right:24px;z-index:999;width:48px;height:48px;border-radius:50%;background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.3);color:#fff;font-size:20px;cursor:pointer;backdrop-filter:blur(8px);transition:all .3s';
-btn.onmouseover=()=>btn.style.background='rgba(255,255,255,0.25)';
-btn.onmouseout=()=>btn.style.background='rgba(255,255,255,0.15)';
-document.body.appendChild(btn);
-btn.onclick=()=>{if(!ctx)initAudio();else{isActive=!isActive;master.gain.value=isActive?0.15:0;btn.style.opacity=isActive?'1':'0.5';}};
-document.addEventListener('click',()=>{if(!ctx)initAudio();},{ once:true });
+resize();
+window.addEventListener('resize', resize);
+
+// 诗句
+const LINES = ['旧梦如烟', '散作满天星', '你来过', '却又走了', '留一地月光'];
+let poemPhase = 0; // 当前显示哪行
+let poemTimer = 0;
+const POEM_SHOW = 220;   // 显示帧数
+const POEM_FADE = 120;   // 溶解帧数
+const POEM_GAP  = 60;    // 间隔
+
+// ── 光晕粒子（Turner的金色薄雾）──
+const GLOWS = [];
+for (let i = 0; i < 90; i++) {
+  GLOWS.push({
+    x: Math.random(), y: Math.random(),
+    r: 0.03 + Math.random() * 0.15,
+    vx: (Math.random() - 0.5) * 0.0003,
+    vy: (Math.random() - 0.5) * 0.0002 - 0.0001,
+    hue: 30 + Math.random() * 30,
+    sat: 60 + Math.random() * 30,
+    lit: 40 + Math.random() * 25,
+    alpha: 0.02 + Math.random() * 0.06,
+    phase: Math.random() * Math.PI * 2,
+  });
+}
+
+// ── 溶解粒子（文字碎片）──
+const DISSOLVE = [];
+
+function spawnDissolve(x, y, char) {
+  const count = 12 + Math.floor(Math.random() * 8);
+  for (let i = 0; i < count; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = 0.3 + Math.random() * 1.2;
+    DISSOLVE.push({
+      x, y,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed - 0.5,
+      r: 1.5 + Math.random() * 3,
+      life: 1,
+      decay: 0.005 + Math.random() * 0.008,
+      hue: 30 + Math.random() * 35,
+      char: Math.random() < 0.15 ? char : null, // 少量保留字符
+    });
+  }
+}
+
+// ── 珍珠光点（远景漂浮）──
+const PEARLS = [];
+for (let i = 0; i < 40; i++) {
+  PEARLS.push({
+    x: Math.random() * W, y: Math.random() * H,
+    r: 1 + Math.random() * 2,
+    phase: Math.random() * Math.PI * 2,
+    speed: 0.2 + Math.random() * 0.5,
+  });
+}
+
+function draw() {
+  requestAnimationFrame(draw);
+  time++;
+
+  // 不清屏，用半透明覆盖实现拖尾（Turner雾感）
+  ctx.fillStyle = 'rgba(10,8,24,0.06)';
+  ctx.fillRect(0, 0, W, H);
+
+  // ── 光晕层（大面积柔光圆）──
+  for (const g of GLOWS) {
+    g.x += g.vx + Math.sin(time * 0.005 + g.phase) * 0.0002;
+    g.y += g.vy + Math.cos(time * 0.004 + g.phase) * 0.0001;
+    if (g.x < -0.2) g.x = 1.2;
+    if (g.x > 1.2) g.x = -0.2;
+    if (g.y < -0.2) g.y = 1.2;
+    if (g.y > 1.2) g.y = -0.2;
+
+    const gx = g.x * W, gy = g.y * H, gr = g.r * Math.min(W, H);
+    const pulse = g.alpha * (0.7 + Math.sin(time * 0.02 + g.phase) * 0.3);
+
+    // 鼠标影响：附近光晕被推开
+    if (mouseX > 0) {
+      const dx = gx - mouseX, dy = gy - mouseY;
+      const d = Math.sqrt(dx * dx + dy * dy);
+      if (d < 200) {
+        const push = (1 - d / 200) * 0.003;
+        g.x += (dx / d) * push;
+        g.y += (dy / d) * push;
+      }
+    }
+
+    const grad = ctx.createRadialGradient(gx, gy, 0, gx, gy, gr);
+    grad.addColorStop(0, `hsla(${g.hue},${g.sat}%,${g.lit}%,${pulse})`);
+    grad.addColorStop(0.5, `hsla(${g.hue+10},${g.sat-10}%,${g.lit-10}%,${pulse*0.4})`);
+    grad.addColorStop(1, 'transparent');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(gx, gy, gr, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // ── 珍珠光点 ──
+  for (const p of PEARLS) {
+    const px = p.x + Math.sin(time * 0.01 + p.phase) * 15;
+    const py = p.y + Math.cos(time * 0.008 + p.phase) * 10;
+    const pa = 0.3 + Math.sin(time * 0.03 + p.phase) * 0.2;
+    ctx.fillStyle = `rgba(255,240,200,${pa})`;
+    ctx.beginPath();
+    ctx.arc(px, py, p.r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // ── 诗句系统 ──
+  poemTimer++;
+  const totalCycle = POEM_SHOW + POEM_FADE + POEM_GAP;
+  const lineIdx = Math.floor(poemPhase) % LINES.length;
+  const cycleT = poemTimer % totalCycle;
+
+  if (cycleT < POEM_SHOW) {
+    // 显示文字（逐字淡入）
+    const text = LINES[lineIdx];
+    const fontSize = Math.min(W, H) * 0.065;
+    ctx.font = `300 ${fontSize}px "STKaiti","KaiTi","Songti SC",serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const charW = fontSize * 1.3;
+    const startX = W / 2 - (text.length - 1) * charW / 2;
+
+    for (let i = 0; i < text.length; i++) {
+      const charDelay = i * 12;
+      const charAlpha = Math.min(1, Math.max(0, (cycleT - charDelay) / 30));
+      ctx.fillStyle = `rgba(255,230,180,${charAlpha * 0.85})`;
+      ctx.shadowColor = `rgba(255,200,100,${charAlpha * 0.6})`;
+      ctx.shadowBlur = 25;
+      ctx.fillText(text[i], startX + i * charW, H * 0.48);
+    }
+    ctx.shadowBlur = 0;
+  } else if (cycleT < POEM_SHOW + POEM_FADE) {
+    // 溶解阶段：每帧从字符位置喷射粒子
+    const dissolveT = cycleT - POEM_SHOW;
+    if (dissolveT < 10) { // 前10帧生成溶解粒子
+      const text = LINES[lineIdx];
+      const fontSize = Math.min(W, H) * 0.065;
+      const charW = fontSize * 1.3;
+      const startX = W / 2 - (text.length - 1) * charW / 2;
+      for (let i = 0; i < text.length; i++) {
+        if (dissolveT === Math.floor(i * 2)) {
+          spawnDissolve(startX + i * charW, H * 0.48, text[i]);
+        }
+      }
+    }
+    // 残影文字渐隐
+    const fadeAlpha = Math.max(0, 1 - (dissolveT / POEM_FADE));
+    if (fadeAlpha > 0.05) {
+      const text = LINES[lineIdx];
+      const fontSize = Math.min(W, H) * 0.065;
+      ctx.font = `300 ${fontSize}px "STKaiti","KaiTi","Songti SC",serif`;
+      ctx.textAlign = 'center';
+      ctx.fillStyle = `rgba(255,230,180,${fadeAlpha * 0.3})`;
+      ctx.fillText(text, W/2, H * 0.48);
+    }
+  } else if (cycleT === POEM_SHOW + POEM_FADE + POEM_GAP - 1) {
+    poemPhase++;
+  }
+
+  // ── 溶解粒子 ──
+  for (let i = DISSOLVE.length - 1; i >= 0; i--) {
+    const d = DISSOLVE[i];
+    d.x += d.vx;
+    d.y += d.vy;
+    d.vy -= 0.01; // 微微上飘
+    d.life -= d.decay;
+    if (d.life <= 0) { DISSOLVE.splice(i, 1); continue; }
+
+    if (d.char) {
+      // 字符碎片
+      ctx.font = `${10 + d.r * 2}px "STKaiti",serif`;
+      ctx.fillStyle = `rgba(255,220,160,${d.life * 0.6})`;
+      ctx.shadowColor = `rgba(255,180,80,${d.life * 0.4})`;
+      ctx.shadowBlur = 8;
+      ctx.textAlign = 'center';
+      ctx.fillText(d.char, d.x, d.y);
+      ctx.shadowBlur = 0;
+    } else {
+      // 光点碎片
+      ctx.fillStyle = `hsla(${d.hue},70%,60%,${d.life * 0.5})`;
+      ctx.shadowColor = `hsla(${d.hue},80%,50%,${d.life * 0.3})`;
+      ctx.shadowBlur = 6;
+      ctx.beginPath();
+      ctx.arc(d.x, d.y, d.r * d.life, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    }
+  }
+}
+
+// ── 事件 ──
+window.addEventListener('mousemove', e => { mouseX = e.clientX; mouseY = e.clientY; });
+window.addEventListener('mouseleave', () => { mouseX = -1; mouseY = -1; });
+window.addEventListener('touchmove', e => {
+  e.preventDefault(); mouseX = e.touches[0].clientX; mouseY = e.touches[0].clientY;
+}, {passive:false});
+window.addEventListener('touchend', () => { mouseX = -1; mouseY = -1; });
+
+draw();
 </script>
 </body>
 </html>

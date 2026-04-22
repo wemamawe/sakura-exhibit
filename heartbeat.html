@@ -1,379 +1,192 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>心事 - Heartbeat</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        body {
-            background: #000;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            font-family: 'Courier New', monospace;
-            overflow: hidden; touch-action: none;
-        }
-        canvas {
-            border: 1px solid #0a3d62;
-            box-shadow: 0 0 30px rgba(10, 61, 98, 0.5);
-        }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no">
+<title>心事 · Heartbeat</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0a0808;overflow:hidden;touch-action:none}
+canvas{display:block;position:fixed;top:0;left:0}
+</style>
 </head>
 <body>
-    <canvas id="canvas"></canvas>
-    <script>
-        const canvas = document.getElementById('canvas');
-        const ctx = canvas.getContext('2d');
-        let width = window.innerWidth;
-        let height = window.innerHeight; canvas.width = width; canvas.height = height;
-        
-        // 鼠标位置
-        let mouseX = width / 2;
-        let mouseY = height / 2;
-        
-        // 心跳参数
-        let baseHeartRate = 60; // 基础心率
-        let currentBPM = 60;
-        let heartbeatProgress = 0;
-        let lastBeatTime = 0;
-        
-        // 波形数据
-        let waveformData = [];
-        const waveformLength = width + 100;
-        
-        // 文字粒子
-        const textFragments = [
-            '心事重重',
-            '欲说还休',
-            '却道天凉好个秋',
-            '少年不识愁滋味',
-            '为赋新词强说愁'
-        ];
-        let particles = [];
-        
-        // 监听鼠标移动
-        canvas.addEventListener('mousemove', (e) => {
-            const rect = canvas.getBoundingClientRect();
-            mouseX = e.clientX - rect.left;
-            mouseY = e.clientY - rect.top;
-        });
-        
-        // 触摸支持
-        canvas.addEventListener('touchstart', (e) => {
-            e.preventDefault();
-            const touch = e.touches[0];
-            const rect = canvas.getBoundingClientRect();
-            mouseX = touch.clientX - rect.left;
-            mouseY = touch.clientY - rect.top;
-        });
-        canvas.addEventListener('touchmove', (e) => {
-            e.preventDefault();
-            const touch = e.touches[0];
-            const rect = canvas.getBoundingClientRect();
-            mouseX = touch.clientX - rect.left;
-            mouseY = touch.clientY - rect.top;
-        });
-        
-        // 计算基于鼠标距离中心的心率
-        function calculateBPM() {
-            const centerX = width / 2;
-            const centerY = height / 2;
-            const distance = Math.sqrt(
-                Math.pow(mouseX - centerX, 2) + 
-                Math.pow(mouseY - centerY, 2)
-            );
-            const maxDistance = Math.sqrt(
-                Math.pow(centerX, 2) + 
-                Math.pow(centerY, 2)
-            );
-            const normalizedDistance = 1 - (distance / maxDistance);
-            
-            // 距离中心越近,心率越快 (60-120 BPM)
-            return 60 + normalizedDistance * 60;
-        }
-        
-        // 生成心电图QRS波形
-        function generateQRSWave(x, amplitude) {
-            const waves = [];
-            // P波 (小的圆润波)
-            waves.push({ x: x - 40, y: -amplitude * 0.15 });
-            // Q波 (下降)
-            waves.push({ x: x - 15, y: amplitude * 0.1 });
-            // R波 (尖峰)
-            waves.push({ x: x, y: -amplitude * 1.0 });
-            // S波 (下降)
-            waves.push({ x: x + 15, y: amplitude * 0.2 });
-            // T波 (圆润波)
-            waves.push({ x: x + 50, y: -amplitude * 0.2 });
-            
-            return waves;
-        }
-        
-        // 创建文字粒子爆炸
-        function createTextExplosion(x, y) {
-            const text = textFragments[Math.floor(Math.random() * textFragments.length)];
-            const chars = text.split('');
-            
-            chars.forEach((char, i) => {
-                const angle = (Math.PI * 2 / chars.length) * i + Math.random() * 0.5;
-                const speed = 1 + Math.random() * 2;
-                
-                particles.push({
-                    x: x,
-                    y: y,
-                    vx: Math.cos(angle) * speed,
-                    vy: Math.sin(angle) * speed,
-                    char: char,
-                    life: 1.0,
-                    size: 14 + Math.random() * 10
-                });
-            });
-        }
-        
-        // 绘制网格背景
-        function drawGrid() {
-            ctx.strokeStyle = 'rgba(10, 61, 98, 0.15)';
-            ctx.lineWidth = 1;
-            
-            // 垂直线
-            for (let x = 0; x < width; x += 20) {
-                ctx.beginPath();
-                ctx.moveTo(x, 0);
-                ctx.lineTo(x, height);
-                ctx.stroke();
-            }
-            
-            // 水平线
-            for (let y = 0; y < height; y += 20) {
-                ctx.beginPath();
-                ctx.moveTo(0, y);
-                ctx.lineTo(width, y);
-                ctx.stroke();
-            }
-            
-            // 加粗线
-            ctx.strokeStyle = 'rgba(10, 61, 98, 0.3)';
-            ctx.lineWidth = 1.5;
-            for (let x = 0; x < width; x += 100) {
-                ctx.beginPath();
-                ctx.moveTo(x, 0);
-                ctx.lineTo(x, height);
-                ctx.stroke();
-            }
-            for (let y = 0; y < height; y += 100) {
-                ctx.beginPath();
-                ctx.moveTo(0, y);
-                ctx.lineTo(width, y);
-                ctx.stroke();
-            }
-        }
-        
-        // 绘制心电图波形
-        function drawWaveform() {
-            const centerY = height / 2;
-            
-            // 绘制拖尾效果
-            for (let pass = 0; pass < 3; pass++) {
-                ctx.shadowBlur = 15 - pass * 5;
-                ctx.shadowColor = pass === 0 ? 'rgba(0, 255, 100, 0.3)' : 'rgba(255, 100, 50, 0.2)';
-                
-                ctx.beginPath();
-                waveformData.forEach((point, i) => {
-                    if (i === 0) {
-                        ctx.moveTo(point.x, centerY + point.y);
-                    } else {
-                        ctx.lineTo(point.x, centerY + point.y);
-                    }
-                });
-                
-                // 渐变色
-                const gradient = ctx.createLinearGradient(0, 0, width, 0);
-                gradient.addColorStop(0, 'rgba(0, 255, 100, 0.8)');
-                gradient.addColorStop(0.5, 'rgba(100, 255, 150, 0.9)');
-                gradient.addColorStop(1, 'rgba(255, 100, 80, 0.8)');
-                
-                ctx.strokeStyle = gradient;
-                ctx.lineWidth = 2 + pass * 0.5;
-                ctx.stroke();
-            }
-            
-            ctx.shadowBlur = 0;
-        }
-        
-        // 更新波形数据
-        function updateWaveform(deltaTime) {
-            currentBPM = calculateBPM();
-            const beatInterval = (60 / currentBPM) * 1000; // 毫秒
-            
-            heartbeatProgress += deltaTime;
-            
-            // 移动所有点向左
-            const scrollSpeed = 2;
-            waveformData.forEach(point => {
-                point.x -= scrollSpeed;
-            });
-            
-            // 移除离开屏幕的点
-            waveformData = waveformData.filter(point => point.x > -100);
-            
-            // 检查是否该产生新心跳
-            if (heartbeatProgress >= beatInterval) {
-                heartbeatProgress = 0;
-                lastBeatTime = Date.now();
-                
-                // 生成QRS波形
-                const qrsWaves = generateQRSWave(width, 80);
-                waveformData.push(...qrsWaves);
-                
-                // 在R波峰值创建文字爆炸
-                const rWave = qrsWaves[2]; // R波是第3个点
-                createTextExplosion(rWave.x, height / 2 + rWave.y);
-            }
-            
-            // 填充基线
-            if (waveformData.length === 0 || waveformData[waveformData.length - 1].x < width) {
-                waveformData.push({ x: width, y: 0 });
-            }
-        }
-        
-        // 更新和绘制粒子
-        function updateParticles(deltaTime) {
-            particles.forEach(particle => {
-                particle.x += particle.vx;
-                particle.y += particle.vy;
-                particle.vy += 0.05; // 重力
-                particle.life -= deltaTime / 3000;
-                
-                if (particle.life > 0) {
-                    ctx.save();
-                    ctx.globalAlpha = particle.life;
-                    ctx.fillStyle = `rgba(255, ${150 + particle.life * 100}, ${100 + particle.life * 150}, 1)`;
-                    ctx.font = `${particle.size}px serif`;
-                    ctx.shadowBlur = 10;
-                    ctx.shadowColor = 'rgba(255, 200, 150, 0.8)';
-                    ctx.fillText(particle.char, particle.x, particle.y);
-                    ctx.restore();
-                }
-            });
-            
-            particles = particles.filter(p => p.life > 0);
-        }
-        
-        // 绘制BPM显示
-        function drawBPM() {
-            ctx.save();
-            ctx.fillStyle = 'rgba(0, 255, 150, 0.8)';
-            ctx.font = 'bold 24px "Courier New"';
-            ctx.shadowBlur = 10;
-            ctx.shadowColor = 'rgba(0, 255, 150, 0.6)';
-            ctx.fillText(`BPM: ${Math.round(currentBPM)}`, 20, height - 30);
-            
-            // 心率状态
-            let status = '平静';
-            if (currentBPM > 100) status = '紧张';
-            else if (currentBPM > 80) status = '不安';
-            
-            ctx.font = '16px "Courier New"';
-            ctx.fillStyle = 'rgba(150, 200, 255, 0.7)';
-            ctx.fillText(`状态: ${status}`, 20, height - 60);
-            
-            ctx.restore();
-        }
-        
-        // 主动画循环
-        let lastTime = Date.now();
-        function animate() {
-            const now = Date.now();
-            const deltaTime = now - lastTime;
-            lastTime = now;
-            
-            // 清空画布 (带拖尾效果)
-            ctx.fillStyle = 'rgba(5, 10, 20, 0.15)';
-            ctx.fillRect(0, 0, width, height);
-            
-            // 绘制网格
-            drawGrid();
-            
-            // 更新和绘制波形
-            updateWaveform(deltaTime);
-            drawWaveform();
-            
-            // 更新和绘制粒子
-            updateParticles(deltaTime);
-            
-            // 绘制BPM
-            drawBPM();
-            
-            requestAnimationFrame(animate);
-        }
-        
-        // 初始化
-        ctx.fillStyle = '#050a14';
-        ctx.fillRect(0, 0, width, height);
-        
-        // Resize 监听
-        window.addEventListener('resize', () => {
-            width = window.innerWidth;
-            height = window.innerHeight;
-            canvas.width = width;
-            canvas.height = height;
-            waveformData = [];
-        });
-        
-        // 启动动画
-        animate();
-    </script>
-
+<canvas id="c"></canvas>
 <script>
-// Generated Audio System - 心跳+呼吸
-// 心跳+呼吸音效
-let ctx, master, isActive=false;
-function initAudio(){
-  if(ctx) return;
-  ctx=new(AudioContext||webkitAudioContext)();
-  master=ctx.createGain();master.gain.value=0.15;master.connect(ctx.destination);
-  
-  // 呼吸白噪声
-  const bufSz=ctx.sampleRate*2,buf=ctx.createBuffer(1,bufSz,ctx.sampleRate),d=buf.getChannelData(0);
-  for(let i=0;i<bufSz;i++)d[i]=Math.random()*2-1;
-  const breath=ctx.createBufferSource();breath.buffer=buf;breath.loop=true;
-  const lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=200;
-  const bg=ctx.createGain();bg.gain.value=0.05;
-  breath.connect(lp);lp.connect(bg);bg.connect(master);breath.start();
-  
-  // 心跳脉冲
-  function beat(){
-    if(!isActive)return;
-    const o=ctx.createOscillator(),g=ctx.createGain();
-    o.frequency.value=55;o.type='sine';
-    g.gain.setValueAtTime(0.18,ctx.currentTime);
-    g.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+0.15);
-    o.connect(g);g.connect(master);o.start();o.stop(ctx.currentTime+0.18);
-    setTimeout(()=>{
-      const o2=ctx.createOscillator(),g2=ctx.createGain();
-      o2.frequency.value=65;o2.type='sine';
-      g2.gain.setValueAtTime(0.12,ctx.currentTime);
-      g2.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+0.12);
-      o2.connect(g2);g2.connect(master);o2.start();o2.stop(ctx.currentTime+0.15);
-    },120);
-    setTimeout(beat,1000);
-  }
-  beat();isActive=true;
+// ══════════════════════════════════════════
+//  心事 — 南·戈尔丁亲密影像感
+//  胶片颗粒质感上的手写心电线，温暖而脆弱
+// ══════════════════════════════════════════
+const C = document.getElementById('c');
+const ctx = C.getContext('2d');
+let W, H, time = 0;
+let mouseX = -1, mouseY = -1;
+
+function resize() { W = C.width = innerWidth; H = C.height = innerHeight; }
+resize();
+window.addEventListener('resize', resize);
+
+const WORDS = ['心事重重','欲说还休','却道天凉好个秋','少年不识愁滋味','为赋新词强说愁',
+               '人生若只如初见','何事秋风悲画扇','等闲变却故人心','却道故人心易变'];
+const PARTICLES = [];
+let heartX = 0;
+let bpm = 72;
+const ecgHistory = [];
+
+// ECG波形生成（真实QRS形态）
+function ecgValue(t) {
+  t = ((t % 1) + 1) % 1;
+  // P波
+  if (t < 0.12) return Math.sin(t / 0.12 * Math.PI) * 0.1;
+  // PR段
+  if (t < 0.18) return 0;
+  // Q波
+  if (t < 0.22) return -(t - 0.18) / 0.04 * 0.15;
+  // R波（尖峰）
+  if (t < 0.28) return -0.15 + (t - 0.22) / 0.06 * 1.15;
+  // S波
+  if (t < 0.34) return 1.0 - (t - 0.28) / 0.06 * 1.2;
+  // ST段
+  if (t < 0.42) return -0.2 + (t - 0.34) / 0.08 * 0.2;
+  // T波
+  if (t < 0.58) return Math.sin((t - 0.42) / 0.16 * Math.PI) * 0.2;
+  // 静息
+  return 0;
 }
-const btn=document.createElement('button');
-btn.innerHTML='🔊';
-btn.style.cssText='position:fixed;bottom:24px;right:24px;z-index:999;width:48px;height:48px;border-radius:50%;background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.3);color:#fff;font-size:20px;cursor:pointer;backdrop-filter:blur(8px);transition:all .3s';
-btn.onmouseover=()=>btn.style.background='rgba(255,255,255,0.25)';
-btn.onmouseout=()=>btn.style.background='rgba(255,255,255,0.15)';
-document.body.appendChild(btn);
-btn.onclick=()=>{if(!ctx)initAudio();else{isActive=!isActive;master.gain.value=isActive?0.15:0;btn.style.opacity=isActive?'1':'0.5';}};
-document.addEventListener('click',()=>{if(!ctx)initAudio();},{ once:true });
+
+function spawnWordParticles(x, y) {
+  const word = WORDS[Math.floor(Math.random() * WORDS.length)];
+  for (let i = 0; i < word.length; i++) {
+    const angle = -Math.PI/2 + (Math.random() - 0.5) * Math.PI;
+    const speed = 1 + Math.random() * 2.5;
+    PARTICLES.push({
+      x: x + (i - word.length/2) * 18,
+      y,
+      vx: Math.cos(angle) * speed * 0.6,
+      vy: Math.sin(angle) * speed,
+      char: word[i],
+      life: 1,
+      decay: 0.004 + Math.random() * 0.005,
+      size: Math.min(W, H) * 0.025 + Math.random() * 5,
+    });
+  }
+}
+
+function draw() {
+  requestAnimationFrame(draw);
+  time += 0.016;
+
+  // ── 胶片底色（暗暖调，南·戈尔丁风格）──
+  ctx.fillStyle = 'rgba(10,8,8,0.12)';
+  ctx.fillRect(0, 0, W, H);
+
+  // 胶片颗粒噪点
+  const imgData = ctx.getImageData(0, 0, W, H);
+  const data = imgData.data;
+  for (let i = 0; i < data.length; i += 16) { // 每隔4像素加噪点（性能优化）
+    const noise = (Math.random() - 0.5) * 6;
+    data[i] = Math.min(255, Math.max(0, data[i] + noise));
+    data[i+1] = Math.min(255, Math.max(0, data[i+1] + noise * 0.8));
+    data[i+2] = Math.min(255, Math.max(0, data[i+2] + noise * 0.6));
+  }
+  ctx.putImageData(imgData, 0, 0);
+
+  // ── BPM随鼠标 ──
+  if (mouseX > 0) {
+    const dx = mouseX - W/2, dy = mouseY - H/2;
+    const dist = Math.sqrt(dx*dx + dy*dy);
+    const maxDist = Math.sqrt(W*W + H*H) / 2;
+    bpm = 60 + (1 - dist / maxDist) * 80; // 60-140
+  } else {
+    bpm = 72 + Math.sin(time * 0.3) * 8;
+  }
+
+  // ── ECG波形绘制（手写线条感）──
+  const beatLen = 60 / bpm; // 每次心跳的秒数
+  const ecgY = H * 0.45;
+  const ecgH = H * 0.18;
+  const phase = (time / beatLen) % 1;
+
+  // 记录历史
+  ecgHistory.push({ x: W * 0.65, y: ecgY - ecgValue(phase) * ecgH, t: time });
+  if (ecgHistory.length > 300) ecgHistory.shift();
+
+  // R波峰值检测（触发文字爆破）
+  if (phase > 0.26 && phase < 0.30 && Math.random() < 0.15) {
+    spawnWordParticles(W * 0.65, ecgY - ecgH);
+  }
+
+  // 绘制ECG线（手写感：微抖动 + 变粗细）
+  if (ecgHistory.length > 2) {
+    // 发光拖尾
+    ctx.shadowBlur = 15;
+    ctx.shadowColor = 'rgba(200,80,60,0.5)';
+
+    ctx.beginPath();
+    ctx.moveTo(ecgHistory[0].x - (time - ecgHistory[0].t) * W * 0.3, ecgHistory[0].y);
+    for (let i = 1; i < ecgHistory.length; i++) {
+      const h = ecgHistory[i];
+      const age = time - h.t;
+      const x = h.x - age * W * 0.3;
+      if (x < -10) continue;
+      // 手写抖动
+      const jitter = Math.sin(i * 3.7) * 0.8;
+      ctx.lineTo(x, h.y + jitter);
+    }
+
+    // 渐变线色（从暗红→亮红→暖橙）
+    const lineGrad = ctx.createLinearGradient(0, 0, W, 0);
+    lineGrad.addColorStop(0, 'rgba(80,20,15,0.2)');
+    lineGrad.addColorStop(0.5, 'rgba(200,60,40,0.7)');
+    lineGrad.addColorStop(0.8, 'rgba(230,120,50,0.9)');
+    lineGrad.addColorStop(1, 'rgba(255,200,100,0.95)');
+    ctx.strokeStyle = lineGrad;
+    ctx.lineWidth = 2.2;
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+  }
+
+  // ── 文字粒子 ──
+  for (let i = PARTICLES.length - 1; i >= 0; i--) {
+    const p = PARTICLES[i];
+    p.x += p.vx; p.y += p.vy;
+    p.vy += 0.015; // 微弱重力
+    p.life -= p.decay;
+    if (p.life <= 0) { PARTICLES.splice(i, 1); continue; }
+
+    ctx.font = `${p.size}px "STKaiti","KaiTi","Songti SC",serif`;
+    ctx.textAlign = 'center';
+    ctx.fillStyle = `rgba(200,160,130,${p.life * 0.7})`;
+    ctx.shadowColor = `rgba(200,100,60,${p.life * 0.3})`;
+    ctx.shadowBlur = 5;
+    ctx.fillText(p.char, p.x, p.y);
+  }
+  ctx.shadowBlur = 0;
+
+  // ── BPM显示（胶片字体风格）──
+  const bpmSize = Math.min(W, H) * 0.028;
+  ctx.font = `300 ${bpmSize}px "Courier New",monospace`;
+  ctx.fillStyle = `rgba(180,120,90,${0.4 + Math.sin(time * 2) * 0.1})`;
+  ctx.textAlign = 'left';
+  ctx.fillText(`♡ ${Math.round(bpm)} BPM`, W * 0.05, H * 0.92);
+
+  // 辛弃疾引用
+  ctx.font = `${bpmSize * 0.7}px "STKaiti","KaiTi",serif`;
+  ctx.fillStyle = 'rgba(160,130,100,0.25)';
+  ctx.textAlign = 'right';
+  ctx.fillText('辛弃疾 · 丑奴儿', W * 0.95, H * 0.95);
+}
+
+// 事件
+window.addEventListener('mousemove', e => { mouseX = e.clientX; mouseY = e.clientY; });
+window.addEventListener('mouseleave', () => { mouseX = -1; });
+window.addEventListener('touchmove', e => {
+  e.preventDefault(); mouseX = e.touches[0].clientX; mouseY = e.touches[0].clientY;
+}, {passive:false});
+window.addEventListener('touchend', () => { mouseX = -1; });
+
+draw();
 </script>
 </body>
 </html>

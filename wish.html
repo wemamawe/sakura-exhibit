@@ -1,355 +1,196 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>愿与愁 · Wish and Sorrow</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
-        body {
-            width: 100%;
-            height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-            font-family: 'KaiTi', 'STKaiti', serif;
-            overflow: hidden;
-            touch-action:none;
-        }
-        
-        canvas {
-            border-radius: 8px;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
-            cursor: crosshair;
-        }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no">
+<title>愿与愁 · Wish & Sorrow</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#1a1210;overflow:hidden;touch-action:none}
+canvas{display:block;position:fixed;top:0;left:0}
+</style>
 </head>
 <body>
-    <canvas id="canvas"></canvas>
-    
-    <script>
-        const canvas = document.getElementById('canvas');
-        const ctx = canvas.getContext('2d');
-        let width = canvas.width = window.innerWidth;
-        let height = canvas.height = window.innerHeight;
-        
-        function handleResize(){
-            width = canvas.width = window.innerWidth;
-            height = canvas.height = window.innerHeight;
-        }
-        window.addEventListener('resize',handleResize);
-        
-        // 鼠标位置
-        let mouseX = width / 2;
-        let mouseY = height / 2;
-        
-        // 分界线控制点
-        const dividerPoints = [];
-        const numPoints = 15;
-        for (let i = 0; i < numPoints; i++) {
-            dividerPoints.push({
-                y: (height / (numPoints - 1)) * i,
-                offset: 0,
-                velocity: Math.random() * 0.5 - 0.25,
-                baseX: width / 2
-            });
-        }
-        
-        // 萤火虫粒子（左侧 - 愿）
-        const fireflies = [];
-        for (let i = 0; i < 30; i++) {
-            fireflies.push({
-                x: Math.random() * width / 2,
-                y: Math.random() * height,
-                size: Math.random() * 3 + 1,
-                speedY: -(Math.random() * 0.5 + 0.3),
-                speedX: Math.random() * 0.4 - 0.2,
-                alpha: Math.random(),
-                alphaChange: Math.random() * 0.02 + 0.01,
-                color: Math.random() > 0.5 ? 'rgba(255, 200, 100' : 'rgba(255, 170, 80'
-            });
-        }
-        
-        // 雨滴粒子（右侧 - 愁）
-        const raindrops = [];
-        for (let i = 0; i < 40; i++) {
-            raindrops.push({
-                x: Math.random() * width / 2 + width / 2,
-                y: Math.random() * height,
-                size: Math.random() * 2 + 1,
-                speedY: Math.random() * 2 + 1,
-                speedX: Math.random() * 0.3 - 0.15,
-                length: Math.random() * 10 + 5,
-                alpha: Math.random() * 0.6 + 0.3,
-                color: Math.random() > 0.5 ? 'rgba(100, 150, 255' : 'rgba(80, 120, 200'
-            });
-        }
-        
-        // 诗句（左侧 - 愿）
-        const wishPoems = [
-            { text: '愿你走出半生', y: 150, alpha: 0, targetAlpha: 1, speed: 0.5 },
-            { text: '归来仍是少年', y: 200, alpha: 0, targetAlpha: 1, speed: 0.5 }
-        ];
-        
-        // 诗句（右侧 - 愁）
-        const sorrowPoems = [
-            { text: '此情可待成追忆', y: 500, alpha: 0, targetAlpha: 1, speed: 0.5 },
-            { text: '只是当时已惘然', y: 550, alpha: 0, targetAlpha: 1, speed: 0.5 }
-        ];
-        
-        // 鼠标移动监听
-        canvas.addEventListener('mousemove', (e) => {
-            const rect = canvas.getBoundingClientRect();
-            mouseX = e.clientX - rect.left;
-            mouseY = e.clientY - rect.top;
-        });
-        // 触摸支持
-        canvas.addEventListener('touchmove', (e) => {
-            e.preventDefault();
-            const rect = canvas.getBoundingClientRect();
-            if(e.touches[0]){
-                mouseX = e.touches[0].clientX - rect.left;
-                mouseY = e.touches[0].clientY - rect.top;
-            }
-        },{passive:false});
-        
-        // 更新分界线
-        function updateDivider() {
-            dividerPoints.forEach((point, i) => {
-                // 受鼠标影响
-                const distanceToMouse = Math.abs(point.y - mouseY);
-                const mouseInfluence = Math.max(0, 1 - distanceToMouse / 150);
-                const pushForce = (mouseX - width / 2) * mouseInfluence * 0.3;
-                
-                // 自然波动
-                point.offset += point.velocity;
-                if (Math.abs(point.offset) > 50) {
-                    point.velocity *= -0.8;
-                }
-                point.velocity += (Math.random() - 0.5) * 0.1;
-                point.velocity *= 0.98;
-                
-                // 结合鼠标和自然波动
-                point.baseX = width / 2 + point.offset + pushForce;
-            });
-        }
-        
-        // 绘制分界线
-        function drawDivider() {
-            ctx.beginPath();
-            ctx.moveTo(dividerPoints[0].baseX, 0);
-            
-            for (let i = 0; i < dividerPoints.length - 1; i++) {
-                const curr = dividerPoints[i];
-                const next = dividerPoints[i + 1];
-                const midX = (curr.baseX + next.baseX) / 2;
-                const midY = (curr.y + next.y) / 2;
-                ctx.quadraticCurveTo(curr.baseX, curr.y, midX, midY);
-            }
-            
-            const last = dividerPoints[dividerPoints.length - 1];
-            ctx.lineTo(last.baseX, height);
-            
-            // 绘制渐变效果
-            const gradient = ctx.createLinearGradient(0, 0, width, 0);
-            gradient.addColorStop(0, 'rgba(255, 200, 100, 0.3)');
-            gradient.addColorStop(0.5, 'rgba(255, 255, 255, 0.6)');
-            gradient.addColorStop(1, 'rgba(100, 150, 255, 0.3)');
-            
-            ctx.strokeStyle = gradient;
-            ctx.lineWidth = 3;
-            ctx.shadowBlur = 15;
-            ctx.shadowColor = 'rgba(255, 255, 255, 0.8)';
-            ctx.stroke();
-            ctx.shadowBlur = 0;
-        }
-        
-        // 更新萤火虫
-        function updateFireflies() {
-            fireflies.forEach(fly => {
-                fly.y += fly.speedY;
-                fly.x += fly.speedX;
-                
-                // 闪烁效果
-                fly.alpha += fly.alphaChange;
-                if (fly.alpha > 1 || fly.alpha < 0.2) {
-                    fly.alphaChange *= -1;
-                }
-                
-                // 重置位置
-                if (fly.y < -10) {
-                    fly.y = height + 10;
-                    fly.x = Math.random() * width / 2;
-                }
-                if (fly.x < 0 || fly.x > width / 2) {
-                    fly.speedX *= -1;
-                }
-            });
-        }
-        
-        // 绘制萤火虫
-        function drawFireflies() {
-            fireflies.forEach(fly => {
-                ctx.beginPath();
-                ctx.arc(fly.x, fly.y, fly.size, 0, Math.PI * 2);
-                ctx.fillStyle = fly.color + ', ' + fly.alpha + ')';
-                ctx.shadowBlur = 15;
-                ctx.shadowColor = fly.color + ', 1)';
-                ctx.fill();
-                ctx.shadowBlur = 0;
-            });
-        }
-        
-        // 更新雨滴
-        function updateRaindrops() {
-            raindrops.forEach(drop => {
-                drop.y += drop.speedY;
-                drop.x += drop.speedX;
-                
-                // 重置位置
-                if (drop.y > height + 20) {
-                    drop.y = -20;
-                    drop.x = Math.random() * width / 2 + width / 2;
-                }
-                if (drop.x < width / 2 || drop.x > width) {
-                    drop.speedX *= -1;
-                }
-            });
-        }
-        
-        // 绘制雨滴
-        function drawRaindrops() {
-            raindrops.forEach(drop => {
-                ctx.beginPath();
-                ctx.moveTo(drop.x, drop.y);
-                ctx.lineTo(drop.x + drop.speedX * 2, drop.y + drop.length);
-                ctx.strokeStyle = drop.color + ', ' + drop.alpha + ')';
-                ctx.lineWidth = drop.size;
-                ctx.lineCap = 'round';
-                ctx.stroke();
-            });
-        }
-        
-        // 更新诗句动画
-        function updatePoems() {
-            wishPoems.forEach((poem, i) => {
-                poem.alpha += (poem.targetAlpha - poem.alpha) * 0.02;
-                poem.y += poem.speed;
-                if (poem.y > 250) {
-                    poem.y = 100;
-                    poem.alpha = 0;
-                }
-            });
-            
-            sorrowPoems.forEach((poem, i) => {
-                poem.alpha += (poem.targetAlpha - poem.alpha) * 0.02;
-                poem.y += poem.speed;
-                if (poem.y > 650) {
-                    poem.y = 450;
-                    poem.alpha = 0;
-                }
-            });
-        }
-        
-        // 绘制诗句
-        function drawPoems() {
-            ctx.font = '22px KaiTi';
-            ctx.textAlign = 'center';
-            ctx.shadowBlur = 10;
-            
-            // 左侧诗句（愿）
-            wishPoems.forEach(poem => {
-                ctx.fillStyle = `rgba(255, 220, 150, ${poem.alpha})`;
-                ctx.shadowColor = 'rgba(255, 200, 100, 0.8)';
-                ctx.fillText(poem.text, width / 4, poem.y);
-            });
-            
-            // 右侧诗句（愁）
-            sorrowPoems.forEach(poem => {
-                ctx.fillStyle = `rgba(150, 180, 255, ${poem.alpha})`;
-                ctx.shadowColor = 'rgba(100, 150, 255, 0.8)';
-                ctx.fillText(poem.text, width * 3 / 4, poem.y);
-            });
-            
-            ctx.shadowBlur = 0;
-        }
-        
-        // 绘制背景渐变
-        function drawBackground() {
-            // 左侧暖色
-            const leftGradient = ctx.createLinearGradient(0, 0, width / 2, height);
-            leftGradient.addColorStop(0, '#2d1810');
-            leftGradient.addColorStop(0.5, '#4a2c1a');
-            leftGradient.addColorStop(1, '#3d2415');
-            ctx.fillStyle = leftGradient;
-            ctx.fillRect(0, 0, width / 2, height);
-            
-            // 右侧冷色
-            const rightGradient = ctx.createLinearGradient(width / 2, 0, width, height);
-            rightGradient.addColorStop(0, '#0f1825');
-            rightGradient.addColorStop(0.5, '#1a2740');
-            rightGradient.addColorStop(1, '#142030');
-            ctx.fillStyle = rightGradient;
-            ctx.fillRect(width / 2, 0, width / 2, height);
-        }
-        
-        // 主动画循环
-        function animate() {
-            drawBackground();
-            
-            updateDivider();
-            updateFireflies();
-            updateRaindrops();
-            updatePoems();
-            
-            drawFireflies();
-            drawRaindrops();
-            drawDivider();
-            drawPoems();
-            
-            requestAnimationFrame(animate);
-        }
-        
-        // 启动动画
-        animate();
-    </script>
-
+<canvas id="c"></canvas>
 <script>
-// Generated Audio System - 双声道对比音
-// 双声道对比音音效
-let ctx, master, isActive=false;
-function initAudio(){
-  if(ctx) return;
-  ctx=new(AudioContext||webkitAudioContext)();
-  master=ctx.createGain();master.gain.value=0.15;master.connect(ctx.destination);
-  
-  // 左声道暖和弦
-  const panL=ctx.createStereoPanner();panL.pan.value=-0.8;
-  const oL=ctx.createOscillator(),gL=ctx.createGain();
-  oL.frequency.value=220;oL.type='sine';gL.gain.value=0.10;
-  oL.connect(gL);gL.connect(panL);panL.connect(master);oL.start();
-  
-  // 右声道冷泛音
-  const panR=ctx.createStereoPanner();panR.pan.value=0.8;
-  const oR=ctx.createOscillator(),gR=ctx.createGain();
-  oR.frequency.value=880;oR.type='triangle';gR.gain.value=0.06;
-  oR.connect(gR);gR.connect(panR);panR.connect(master);oR.start();
-  isActive=true;
+// ══════════════════════════════════════════
+//  愿与愁 — 罗斯科（Rothko）色域绘画
+//  两大色块呼吸膨胀，诗句在交界处若隐若现
+// ══════════════════════════════════════════
+const C = document.getElementById('c');
+const ctx = C.getContext('2d');
+let W, H, time = 0;
+let mouseX = -1, mouseY = -1;
+
+function resize() { W = C.width = innerWidth; H = C.height = innerHeight; }
+resize();
+window.addEventListener('resize', resize);
+
+// Rothko色域参数
+let splitY = 0.5; // 分割线位置（0~1）
+let targetSplit = 0.5;
+
+// 上区（愿）：暖金/深橙/绛红
+const WARM = {
+  colors: [[180,100,30],[210,130,40],[160,60,30],[200,120,50],[170,80,25]],
+  particles: [],
+};
+// 下区（愁）：深蓝/靛/冷紫
+const COLD = {
+  colors: [[20,30,80],[15,20,70],[30,25,90],[10,15,60],[25,35,100]],
+  particles: [],
+};
+
+// 萤火虫粒子（暖区，向上飘）
+for (let i = 0; i < 40; i++) {
+  WARM.particles.push({
+    x: Math.random(), y: Math.random(),
+    r: 2 + Math.random() * 3,
+    vx: (Math.random() - 0.5) * 0.001,
+    vy: -0.0005 - Math.random() * 0.001,
+    phase: Math.random() * Math.PI * 2,
+  });
 }
-const btn=document.createElement('button');
-btn.innerHTML='🔊';
-btn.style.cssText='position:fixed;bottom:24px;right:24px;z-index:999;width:48px;height:48px;border-radius:50%;background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.3);color:#fff;font-size:20px;cursor:pointer;backdrop-filter:blur(8px);transition:all .3s';
-btn.onmouseover=()=>btn.style.background='rgba(255,255,255,0.25)';
-btn.onmouseout=()=>btn.style.background='rgba(255,255,255,0.15)';
-document.body.appendChild(btn);
-btn.onclick=()=>{if(!ctx)initAudio();else{isActive=!isActive;master.gain.value=isActive?0.15:0;btn.style.opacity=isActive?'1':'0.5';}};
-document.addEventListener('click',()=>{if(!ctx)initAudio();},{ once:true });
+// 雨滴粒子（冷区，向下坠）
+for (let i = 0; i < 50; i++) {
+  COLD.particles.push({
+    x: Math.random(), y: Math.random(),
+    len: 8 + Math.random() * 15,
+    vy: 0.002 + Math.random() * 0.003,
+    alpha: 0.15 + Math.random() * 0.25,
+    phase: Math.random() * Math.PI * 2,
+  });
+}
+
+// 诗句
+const POEM_TOP = ['愿你走出半生', '归来仍是少年'];
+const POEM_BOT = ['此情可待成追忆', '只是当时已惘然'];
+
+function drawRothkoBlock(yStart, yEnd, colors, breath) {
+  // Rothko风格：柔边巨大色块，多层叠加
+  const h = yEnd - yStart;
+  for (let layer = 0; layer < colors.length; layer++) {
+    const c = colors[layer];
+    const margin = W * (0.06 + layer * 0.02);
+    const yMargin = h * (0.04 + layer * 0.02);
+    const x = margin + Math.sin(time * 0.3 + layer) * 8;
+    const y = yStart + yMargin + Math.cos(time * 0.25 + layer * 0.5) * 5;
+    const w = W - margin * 2 + Math.sin(time * 0.2 + layer * 0.7) * 10;
+    const bh = h - yMargin * 2 + breath * Math.sin(time * 0.15 + layer) * h * 0.05;
+
+    // 超柔化边缘
+    ctx.shadowBlur = 40 + layer * 10;
+    ctx.shadowColor = `rgba(${c[0]},${c[1]},${c[2]},0.3)`;
+    ctx.fillStyle = `rgba(${c[0]},${c[1]},${c[2]},${0.12 - layer * 0.015})`;
+
+    // 圆角矩形
+    const cr = 8;
+    ctx.beginPath();
+    ctx.moveTo(x + cr, y); ctx.lineTo(x + w - cr, y);
+    ctx.arcTo(x+w, y, x+w, y+cr, cr);
+    ctx.lineTo(x+w, y+bh-cr);
+    ctx.arcTo(x+w, y+bh, x+w-cr, y+bh, cr);
+    ctx.lineTo(x+cr, y+bh);
+    ctx.arcTo(x, y+bh, x, y+bh-cr, cr);
+    ctx.lineTo(x, y+cr);
+    ctx.arcTo(x, y, x+cr, y, cr);
+    ctx.fill();
+  }
+  ctx.shadowBlur = 0;
+}
+
+function draw() {
+  requestAnimationFrame(draw);
+  time += 0.016;
+
+  // 鼠标影响分割线
+  if (mouseX > 0) {
+    targetSplit = mouseY / H;
+  } else {
+    targetSplit = 0.5 + Math.sin(time * 0.2) * 0.04;
+  }
+  splitY += (targetSplit - splitY) * 0.02;
+
+  // 深色底（Rothko画框感）
+  ctx.fillStyle = '#0d0a08';
+  ctx.fillRect(0, 0, W, H);
+
+  const splitPx = splitY * H;
+
+  // 暖区（上）
+  drawRothkoBlock(0, splitPx, WARM.colors, 1);
+
+  // 冷区（下）
+  drawRothkoBlock(splitPx, H, COLD.colors, 1);
+
+  // ── 交界处：柔光融合带 ──
+  const bandH = H * 0.08;
+  const bandGrad = ctx.createLinearGradient(0, splitPx - bandH, 0, splitPx + bandH);
+  bandGrad.addColorStop(0, 'rgba(200,120,40,0.06)');
+  bandGrad.addColorStop(0.5, 'rgba(120,70,80,0.1)');
+  bandGrad.addColorStop(1, 'rgba(20,30,90,0.06)');
+  ctx.fillStyle = bandGrad;
+  ctx.fillRect(0, splitPx - bandH, W, bandH * 2);
+
+  // ── 萤火虫（暖区）──
+  for (const p of WARM.particles) {
+    p.x += p.vx + Math.sin(time * 2 + p.phase) * 0.0003;
+    p.y += p.vy;
+    if (p.y < -0.05) { p.y = splitY - 0.02; p.x = Math.random(); }
+    if (p.y > splitY) p.vy = -Math.abs(p.vy);
+
+    const px = p.x * W, py = p.y * H;
+    const pulse = 0.3 + Math.sin(time * 3 + p.phase) * 0.2;
+    ctx.shadowBlur = 12;
+    ctx.shadowColor = `rgba(255,200,80,${pulse})`;
+    ctx.fillStyle = `rgba(255,220,120,${pulse})`;
+    ctx.beginPath(); ctx.arc(px, py, p.r, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.shadowBlur = 0;
+
+  // ── 雨滴（冷区）──
+  for (const p of COLD.particles) {
+    p.y += p.vy;
+    if (p.y > 1.05) { p.y = splitY + 0.02; p.x = Math.random(); }
+
+    const px = p.x * W, py = p.y * H;
+    ctx.strokeStyle = `rgba(80,100,200,${p.alpha})`;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(px, py);
+    ctx.lineTo(px, py + p.len);
+    ctx.stroke();
+  }
+
+  // ── 诗句（交界处若隐若现）──
+  const fontSize = Math.min(W, H) * 0.04;
+  ctx.font = `300 ${fontSize}px "STKaiti","KaiTi","Songti SC",serif`;
+  ctx.textAlign = 'center';
+
+  // 上方诗（暖色，微微上移）
+  const topAlpha = 0.25 + Math.sin(time * 0.5) * 0.15;
+  ctx.fillStyle = `rgba(255,220,160,${topAlpha})`;
+  POEM_TOP.forEach((line, i) => {
+    ctx.fillText(line, W/2, splitPx - fontSize * (2.2 - i * 1.5) + Math.sin(time * 0.3 + i) * 5);
+  });
+
+  // 下方诗（冷色，微微下移）
+  const botAlpha = 0.25 + Math.cos(time * 0.5) * 0.15;
+  ctx.fillStyle = `rgba(140,160,255,${botAlpha})`;
+  POEM_BOT.forEach((line, i) => {
+    ctx.fillText(line, W/2, splitPx + fontSize * (1.2 + i * 1.5) + Math.cos(time * 0.3 + i) * 5);
+  });
+}
+
+// 事件
+window.addEventListener('mousemove', e => { mouseX = e.clientX; mouseY = e.clientY; });
+window.addEventListener('mouseleave', () => { mouseX = -1; });
+window.addEventListener('touchmove', e => {
+  e.preventDefault(); mouseX = e.touches[0].clientX; mouseY = e.touches[0].clientY;
+}, {passive:false});
+window.addEventListener('touchend', () => { mouseX = -1; });
+
+draw();
 </script>
 </body>
 </html>
