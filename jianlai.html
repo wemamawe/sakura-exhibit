@@ -53,83 +53,75 @@ const TXT='学而时习之不亦说乎有朋自远方来不亦乐乎人不知而
 const rc=()=>TXT[Math.floor(Math.random()*TXT.length)];
 
 // 文字缓存
-const SZ=[8,10,12,14,16];
-const cc=new Map();
+const SZ=[8,10,12,14,16,20];
+const ccm=new Map();
 function gCC(ch,sz,hue,lit){
-  const k=ch+sz+hue+lit;if(cc.has(k))return cc.get(k);
-  const c=document.createElement('canvas'),s=sz*2.5;c.width=s;c.height=s;
+  const k=ch+sz+hue+lit;if(ccm.has(k))return ccm.get(k);
+  const c=document.createElement('canvas'),s=Math.ceil(sz*2.5);c.width=s;c.height=s;
   const x=c.getContext('2d');
   x.font=sz+'px "Songti SC","SimSun","KaiTi",serif';
   x.textAlign='center';x.textBaseline='middle';
   x.fillStyle='hsl('+hue+',80%,'+lit+'%)';
   x.fillText(ch,s/2,s/2);
-  cc.set(k,c);return c;
+  ccm.set(k,c);return c;
 }
-for(let i=0;i<TXT.length;i++)SZ.forEach(s=>{gCC(TXT[i],s,42,65);gCC(TXT[i],s,210,60);});
+for(let i=0;i<TXT.length;i++)SZ.forEach(s=>{gCC(TXT[i],s,42,65);gCC(TXT[i],s,210,60);gCC(TXT[i],s,42,40);});
 
 // ═══════════════════════════════════════
-//  第一幕：文字雨粒子
+//  时间轴（秒）
+//  0-5    蓄势：文字暴雨
+//  5-9    凝形：汇聚成双剑（镜头近景→远景）
+//  9-17   厮杀：交锋碰撞
+//  17-21  落字：密集碰撞大量落字
+//  21+    归无：碎裂散尽
 // ═══════════════════════════════════════
-const RAIN=1500;
-const rx=new Float32Array(RAIN),ry=new Float32Array(RAIN);
-const rvx=new Float32Array(RAIN),rvy=new Float32Array(RAIN);
-const ra=new Float32Array(RAIN); // alpha
-const rstate=new Uint8Array(RAIN); // 0=rain 1=gather 2=sword 3=gone
-const rtx=new Float32Array(RAIN),rty=new Float32Array(RAIN); // target
-const rside=new Uint8Array(RAIN); // 0=剑A 1=剑B
-const rcc=new Array(RAIN);
-const rrot=new Float32Array(RAIN);
-const rrotv=new Float32Array(RAIN);
-const rph=new Float32Array(RAIN);
 
-for(let i=0;i<RAIN;i++){
-  rx[i]=Math.random()*W;
-  ry[i]=-Math.random()*H*3;
-  rvx[i]=(Math.random()-.5)*.4;
-  rvy[i]=2+Math.random()*4;
-  ra[i]=.08+Math.random()*.35;
-  rstate[i]=0;
-  rside[i]=i<RAIN/2?0:1;
-  const hue=rside[i]===0?42:210;
+// ═══════════════════════════════════════
+//  文字雨粒子（蓄势+凝形+剑身粒子共用）
+// ═══════════════════════════════════════
+const N=1500;
+const px=new Float32Array(N),py=new Float32Array(N);
+const pvx=new Float32Array(N),pvy=new Float32Array(N);
+const pa=new Float32Array(N);
+const pst=new Uint8Array(N); // 0rain 1gather 2insword
+const ptx=new Float32Array(N),pty=new Float32Array(N);
+const psd=new Uint8Array(N); // 0=A 1=B
+const pcc=new Array(N);
+const prot=new Float32Array(N);
+const protv=new Float32Array(N);
+for(let i=0;i<N;i++){
+  px[i]=Math.random()*W;
+  py[i]=-Math.random()*H*3;
+  pvx[i]=(Math.random()-.5)*.4;
+  pvy[i]=2+Math.random()*4;
+  pa[i]=.08+Math.random()*.35;
+  pst[i]=0;
+  psd[i]=i<N/2?0:1;
+  const hue=psd[i]===0?42:210;
   const sz=SZ[Math.floor(Math.random()*SZ.length)];
-  rcc[i]=gCC(rc(),sz,hue,55+Math.floor(Math.random()*20));
-  rrot[i]=(Math.random()-.5)*.2;
-  rrotv[i]=(Math.random()-.5)*.01;
-  rph[i]=Math.random()*Math.PI*2;
+  pcc[i]=gCC(rc(),sz,hue,50+Math.floor(Math.random()*25));
+  prot[i]=(Math.random()-.5)*.2;
+  protv[i]=(Math.random()-.5)*.01;
 }
 
 // ═══════════════════════════════════════
-//  剑的形状与绘制
+//  剑绘制（带镜头缩放）
 // ═══════════════════════════════════════
-// 剑的参数
-function swordLen(){return Math.min(W,H)*.35;} // 很大的剑
+// 剑的基础长度（很大）
+function baseSwordLen(){return Math.min(W,H)*.42;}
 
-// 剑身上的采样点（用于凝形目标）
-function swordPoints(cx,cy,angle,len,count){
-  const pts=[];
-  const bw=len*.07;
-  for(let i=0;i<count;i++){
-    // 沿剑身均匀分布
-    const t=Math.random(); // 0=尖端 1=柄
-    const yLocal=-len*(1-t);
-    // 宽度随位置变化
-    let w;
-    if(t>.95) w=bw*.3; // 尖端
-    else if(t>.15) w=bw;
-    else w=bw*(1+t/.15*.5); // 护手处稍宽
-    const xLocal=(Math.random()-.5)*w*2;
-    // 旋转
-    const cos=Math.cos(angle),sin=Math.sin(angle);
-    pts.push({
-      x:cx+xLocal*cos-yLocal*sin,
-      y:cy+xLocal*sin+yLocal*cos,
-    });
-  }
-  return pts;
+// 镜头 zoom：凝形阶段先看细节（zoom大），慢慢拉远
+// zoom=3 → 看到剑身局部文字细节
+// zoom=1 → 看到完整的剑
+function getZoom(t){
+  if(t<5) return 1; // 雨阶段不缩放
+  if(t<6) return 1+2*((t-5)/1); // 5-6s 推近
+  if(t<8) return 3; // 6-8s 停在近景
+  if(t<10) return 3-2*((t-8)/2); // 8-10s 拉远
+  return 1;
 }
 
-// 绘制由文字构成的剑
-function drawTextSword(cx,cy,angle,len,hue,alpha,t){
+function drawTextSword(cx,cy,angle,len,hue,alpha,t,zoom){
   ctx.save();
   ctx.translate(cx,cy);
   ctx.rotate(angle);
@@ -137,8 +129,8 @@ function drawTextSword(cx,cy,angle,len,hue,alpha,t){
   const bw=len*.07;
   const bl=len;
 
-  // 剑身光晕（大范围柔光）
-  ctx.globalAlpha=alpha*.12;
+  // 剑身光晕
+  ctx.globalAlpha=alpha*.15;
   const g1=ctx.createLinearGradient(0,-bl*1.05,0,bl*.15);
   g1.addColorStop(0,'hsla('+hue+',90%,80%,1)');
   g1.addColorStop(.4,'hsla('+hue+',70%,60%,.6)');
@@ -146,58 +138,57 @@ function drawTextSword(cx,cy,angle,len,hue,alpha,t){
   ctx.fillStyle=g1;
   ctx.beginPath();
   ctx.moveTo(0,-bl*1.05);
-  ctx.lineTo(-bw*2,-bl*.4);
-  ctx.lineTo(-bw*2,0);
-  ctx.lineTo(bw*2,0);
-  ctx.lineTo(bw*2,-bl*.4);
+  ctx.lineTo(-bw*2.5,-bl*.35);
+  ctx.lineTo(-bw*2.5,0);
+  ctx.lineTo(bw*2.5,0);
+  ctx.lineTo(bw*2.5,-bl*.35);
   ctx.closePath();
   ctx.fill();
 
   // 剑身轮廓
-  ctx.globalAlpha=alpha*.07;
+  ctx.globalAlpha=alpha*.08;
   ctx.strokeStyle='hsla('+hue+',70%,75%,1)';
   ctx.lineWidth=1.2;
   ctx.beginPath();
   ctx.moveTo(0,-bl); // 尖端
   ctx.lineTo(-bw*.3,-bl*.92);
   ctx.lineTo(-bw,-bl*.12);
-  ctx.lineTo(-bw*1.8,2);  // 护手左
-  ctx.lineTo(-bw*1.8,8);
-  ctx.lineTo(-bw*.45,8);
-  ctx.lineTo(-bw*.35,bl*.15); // 柄底
-  ctx.lineTo(bw*.35,bl*.15);
-  ctx.lineTo(bw*.45,8);
-  ctx.lineTo(bw*1.8,8);
-  ctx.lineTo(bw*1.8,2);   // 护手右
+  ctx.lineTo(-bw*1.8,2);
+  ctx.lineTo(-bw*1.8,10);
+  ctx.lineTo(-bw*.45,10);
+  ctx.lineTo(-bw*.38,bl*.18);
+  ctx.lineTo(bw*.38,bl*.18);
+  ctx.lineTo(bw*.45,10);
+  ctx.lineTo(bw*1.8,10);
+  ctx.lineTo(bw*1.8,2);
   ctx.lineTo(bw,-bl*.12);
   ctx.lineTo(bw*.3,-bl*.92);
   ctx.closePath();
   ctx.stroke();
-
   // 剑脊
   ctx.globalAlpha=alpha*.04;
-  ctx.beginPath();
-  ctx.moveTo(0,-bl);ctx.lineTo(0,0);
-  ctx.strokeStyle='hsla('+hue+',60%,70%,1)';
-  ctx.lineWidth=.6;ctx.stroke();
+  ctx.beginPath();ctx.moveTo(0,-bl);ctx.lineTo(0,0);
+  ctx.strokeStyle='hsla('+hue+',60%,70%,1)';ctx.lineWidth=.6;ctx.stroke();
 
-  // 文字填充
-  const rows=Math.floor(bl/10);
+  // 文字填充：zoom 大时文字更多更密（看细节）
+  const density=Math.max(1,zoom);
+  const step=Math.max(5,10/density);
+  const rows=Math.floor(bl/step);
   for(let i=0;i<rows;i++){
-    const ct=i/rows;
-    const cy2=-bl+bl*ct;
-    // 剑身宽度
+    const ct=i/rows; // 0=柄端 1=尖端
+    const cy2=-bl*ct;
     let localW;
-    if(ct<.08) localW=bw*.3*(ct/.08);
-    else if(ct<.88) localW=bw*(.3+.7*Math.min(1,(ct-.08)/.15));
+    if(ct>.95) localW=bw*.2;
+    else if(ct>.12) localW=bw*(.3+.7*Math.min(1,(ct-.12)/.15));
     else localW=bw*1.5;
-    const cols=Math.max(1,Math.floor(localW*2/10));
+    const cols=Math.max(1,Math.floor(localW*2/step));
     for(let j=0;j<cols;j++){
       const cx2=-localW+(j+.5)*(localW*2)/cols;
       const ch=rc();
-      const sz=SZ[Math.floor(Math.random()*SZ.length)];
-      const lit=50+Math.floor((1-ct)*25);
-      const shimmer=Math.sin(t*3.5+i*.7+j*1.3)*.06;
+      const szIdx=zoom>2?Math.floor(Math.random()*SZ.length):Math.min(SZ.length-1,Math.floor(Math.random()*4));
+      const sz=SZ[szIdx];
+      const lit=45+Math.floor(ct*28);
+      const shimmer=Math.sin(t*3.5+i*.7+j*1.3)*.08;
       ctx.globalAlpha=alpha*(.3+ct*.45+shimmer);
       const c=gCC(ch,sz,hue,lit);
       ctx.drawImage(c,cx2-c.width/2,cy2-c.height/2);
@@ -205,127 +196,133 @@ function drawTextSword(cx,cy,angle,len,hue,alpha,t){
   }
 
   // 护手文字
-  ctx.globalAlpha=alpha*.45;
+  ctx.globalAlpha=alpha*.5;
   for(let j=-3;j<=3;j++){
-    const c=gCC(rc(),10,hue,70);
-    ctx.drawImage(c,j*9-c.width/2,-c.height/2);
+    const c=gCC(rc(),12,hue,70);
+    ctx.drawImage(c,j*10-c.width/2,4-c.height/2);
   }
 
   ctx.restore();
 }
 
+// 剑身上的采样点
+function swordPoints(cx,cy,angle,len,count){
+  const pts=[];
+  const bw=len*.07;
+  const cos=Math.cos(angle),sin=Math.sin(angle);
+  for(let i=0;i<count;i++){
+    const t=Math.random();
+    const yL=-len*(1-t);
+    let w;
+    if(t>.95)w=bw*.2;
+    else if(t>.12)w=bw;
+    else w=bw*1.5;
+    const xL=(Math.random()-.5)*w*2;
+    pts.push({x:cx+xL*cos-yL*sin, y:cy+xL*sin+yL*cos});
+  }
+  return pts;
+}
+
 // ═══════════════════════════════════════
-//  落字粒子（碰撞迸溅 + 最终散落）
+//  落字粒子
 // ═══════════════════════════════════════
-const FMAX=3000;
-const fx=new Float32Array(FMAX),fy=new Float32Array(FMAX);
-const fvx=new Float32Array(FMAX),fvy=new Float32Array(FMAX);
-const fa2=new Float32Array(FMAX);
-const frot2=new Float32Array(FMAX),frotv2=new Float32Array(FMAX);
-const fph2=new Float32Array(FMAX);
-const fcc=new Array(FMAX);
+const FM=3000;
+const fx=new Float32Array(FM),fy=new Float32Array(FM);
+const fvx=new Float32Array(FM),fvy=new Float32Array(FM);
+const fa=new Float32Array(FM);
+const fr=new Float32Array(FM),frv=new Float32Array(FM),fph=new Float32Array(FM);
+const fcc=new Array(FM);
 let fc=0;
 
 function spawnFall(cx,cy,n,str){
-  for(let i=0;i<n&&fc<FMAX;i++){
+  for(let i=0;i<n&&fc<FM;i++){
     const a=Math.random()*Math.PI*2;
     const s=(2+Math.random()*7)*str;
-    fx[fc]=cx+(Math.random()-.5)*15;
-    fy[fc]=cy+(Math.random()-.5)*15;
+    fx[fc]=cx+(Math.random()-.5)*20;
+    fy[fc]=cy+(Math.random()-.5)*20;
     fvx[fc]=Math.cos(a)*s;
     fvy[fc]=Math.sin(a)*s-2;
-    fa2[fc]=.55+Math.random()*.35;
-    frot2[fc]=Math.random()*Math.PI*2;
-    frotv2[fc]=(Math.random()-.5)*.05;
-    fph2[fc]=Math.random()*Math.PI*2;
+    fa[fc]=.55+Math.random()*.35;
+    fr[fc]=Math.random()*Math.PI*2;
+    frv[fc]=(Math.random()-.5)*.05;
+    fph[fc]=Math.random()*Math.PI*2;
     const hue=Math.random()<.5?42:210;
     const sz=SZ[Math.floor(Math.random()*SZ.length)];
-    fcc[fc]=gCC(rc(),sz,hue,55+Math.floor(Math.random()*20));
+    fcc[fc]=gCC(rc(),sz,hue,50+Math.floor(Math.random()*25));
     fc++;
   }
 }
 
-function updateFall(){
+function updateDrawFall(){
   let alive=0;
   for(let i=0;i<fc;i++){
-    fvx[i]*=.988;fvy[i]+=.028;fvy[i]*=.998;
-    fx[i]+=fvx[i]+Math.sin(fph2[i])*.25;
+    fvx[i]*=.988;fvy[i]+=.03;fvy[i]*=.998;
+    fx[i]+=fvx[i]+Math.sin(fph[i])*.25;
     fy[i]+=fvy[i];
-    frot2[i]+=frotv2[i];frotv2[i]*=.999;
-    fph2[i]+=.018;
-    fa2[i]-=.0012;
-    if(fa2[i]>.01&&fy[i]<H+60){
-      if(alive!==i){fx[alive]=fx[i];fy[alive]=fy[i];fvx[alive]=fvx[i];fvy[alive]=fvy[i];
-        fa2[alive]=fa2[i];frot2[alive]=frot2[i];frotv2[alive]=frotv2[i];fph2[alive]=fph2[i];fcc[alive]=fcc[i];}
-      alive++;
-    }
+    fr[i]+=frv[i];frv[i]*=.999;fph[i]+=.018;
+    fa[i]-=.0012;
+    if(fa[i]<.02||fy[i]>H+60)continue;
+    const c=fcc[i],hs=c.width/2;
+    ctx.globalAlpha=fa[i];
+    ctx.save();ctx.translate(fx[i],fy[i]);ctx.rotate(fr[i]);
+    ctx.drawImage(c,-hs,-hs);ctx.restore();
+    if(alive!==i){fx[alive]=fx[i];fy[alive]=fy[i];fvx[alive]=fvx[i];fvy[alive]=fvy[i];
+      fa[alive]=fa[i];fr[alive]=fr[i];frv[alive]=frv[i];fph[alive]=fph[i];fcc[alive]=fcc[i];}
+    alive++;
   }
   fc=alive;
-}
-
-function drawFall(){
-  for(let i=0;i<fc;i++){
-    if(fa2[i]<.02)continue;
-    const c=fcc[i],hs=c.width/2;
-    ctx.globalAlpha=fa2[i];
-    ctx.save();ctx.translate(fx[i],fy[i]);ctx.rotate(frot2[i]);
-    ctx.drawImage(c,-hs,-hs);ctx.restore();
-  }
   ctx.globalAlpha=1;
 }
 
 // ═══════════════════════════════════════
 //  火花
 // ═══════════════════════════════════════
-const SMAX=300;
-const sx=new Float32Array(SMAX),sy=new Float32Array(SMAX);
-const svx=new Float32Array(SMAX),svy=new Float32Array(SMAX);
-const sl=new Float32Array(SMAX),sr=new Float32Array(SMAX);
-const sh=new Uint16Array(SMAX);
-let scc=0;
-
+const SM=300;
+const sx2=new Float32Array(SM),sy2=new Float32Array(SM);
+const svx2=new Float32Array(SM),svy2=new Float32Array(SM);
+const sl2=new Float32Array(SM),sr2=new Float32Array(SM),sh2=new Uint16Array(SM);
+let sc2=0;
 function addSpark(cx,cy,n){
-  for(let i=0;i<n&&scc<SMAX;i++){
+  for(let i=0;i<n&&sc2<SM;i++){
     const a=Math.random()*Math.PI*2,s=5+Math.random()*14;
-    sx[scc]=cx;sy[scc]=cy;
-    svx[scc]=Math.cos(a)*s;svy[scc]=Math.sin(a)*s;
-    sl[scc]=1;sr[scc]=1+Math.random()*2.5;
-    sh[scc]=Math.random()<.5?42:210;
-    scc++;
+    sx2[sc2]=cx;sy2[sc2]=cy;
+    svx2[sc2]=Math.cos(a)*s;svy2[sc2]=Math.sin(a)*s;
+    sl2[sc2]=1;sr2[sc2]=1+Math.random()*2.5;
+    sh2[sc2]=Math.random()<.5?42:210;
+    sc2++;
   }
 }
-
 function drawSparks(){
   let alive=0;
-  for(let i=0;i<scc;i++){
-    sx[i]+=svx[i];sy[i]+=svy[i];
-    svx[i]*=.93;svy[i]*=.93;svy[i]+=.07;
-    sl[i]-=.02;
-    if(sl[i]<=0)continue;
-    ctx.beginPath();ctx.arc(sx[i],sy[i],sr[i]*sl[i],0,Math.PI*2);
-    ctx.fillStyle='hsla('+sh[i]+',100%,75%,'+sl[i]*.8+')';ctx.fill();
-    // 尾迹
-    ctx.beginPath();ctx.moveTo(sx[i],sy[i]);
-    ctx.lineTo(sx[i]-svx[i]*2,sy[i]-svy[i]*2);
-    ctx.strokeStyle='hsla('+sh[i]+',90%,60%,'+sl[i]*.3+')';
-    ctx.lineWidth=sr[i]*sl[i]*.5;ctx.stroke();
-    if(alive!==i){sx[alive]=sx[i];sy[alive]=sy[i];svx[alive]=svx[i];svy[alive]=svy[i];sl[alive]=sl[i];sr[alive]=sr[i];sh[alive]=sh[i];}
+  for(let i=0;i<sc2;i++){
+    sx2[i]+=svx2[i];sy2[i]+=svy2[i];
+    svx2[i]*=.93;svy2[i]*=.93;svy2[i]+=.07;
+    sl2[i]-=.02;
+    if(sl2[i]<=0)continue;
+    ctx.beginPath();ctx.arc(sx2[i],sy2[i],sr2[i]*sl2[i],0,Math.PI*2);
+    ctx.fillStyle='hsla('+sh2[i]+',100%,75%,'+sl2[i]*.8+')';ctx.fill();
+    ctx.beginPath();ctx.moveTo(sx2[i],sy2[i]);
+    ctx.lineTo(sx2[i]-svx2[i]*2,sy2[i]-svy2[i]*2);
+    ctx.strokeStyle='hsla('+sh2[i]+',90%,60%,'+sl2[i]*.3+')';
+    ctx.lineWidth=sr2[i]*sl2[i]*.5;ctx.stroke();
+    if(alive!==i){sx2[alive]=sx2[i];sy2[alive]=sy2[i];svx2[alive]=svx2[i];svy2[alive]=svy2[i];
+      sl2[alive]=sl2[i];sr2[alive]=sr2[i];sh2[alive]=sh2[i];}
     alive++;
   }
-  scc=alive;
+  sc2=alive;
 }
 
 // ═══════════════════════════════════════
 //  剑气残影
 // ═══════════════════════════════════════
 const TL=15;
-const tA=[];const tB=[];
-for(let i=0;i<TL;i++){tA.push({x:0,y:0});tB.push({x:0,y:0});}
+const tA=[],tB=[];
+for(let i=0;i<TL;i++){tA.push({x:-99,y:-99});tB.push({x:-99,y:-99});}
 function pushT(tr,x,y){tr.pop();tr.unshift({x,y});}
-function drawT(tr,hue){
-  if(tr.length<2)return;
+function drawTrail(tr,hue){
   for(let i=1;i<tr.length;i++){
-    const a=(1-i/tr.length)*.1;
+    if(tr[i].x<-50)continue;
+    const a=(1-i/tr.length)*.12;
     ctx.globalAlpha=a;
     ctx.strokeStyle='hsla('+hue+',70%,65%,1)';
     ctx.lineWidth=2.5-i*.15;ctx.lineCap='round';
@@ -335,37 +332,56 @@ function drawT(tr,hue){
 }
 
 // ═══════════════════════════════════════
-//  五幕编排
-//  0-5s   蓄势：文字雨+「儒」字
-//  5-9s   凝形：文字汇聚成双剑
-//  9-16s  厮杀：双剑由远及近交锋
-//  16-20s 落字：最猛烈碰撞，大量文字掉落
-//  20s+   归无：碎裂，散尽
+//  背景：稀疏文字雨（全程氛围）
 // ═══════════════════════════════════════
+const BN=100;
+const bx=new Float32Array(BN),by=new Float32Array(BN);
+const bvy=new Float32Array(BN),ba=new Float32Array(BN);
+const bcc=new Array(BN);
+for(let i=0;i<BN;i++){
+  bx[i]=Math.random()*W;by[i]=Math.random()*H;
+  bvy[i]=.2+Math.random()*.5;
+  ba[i]=.03+Math.random()*.06;
+  bcc[i]=gCC(rc(),SZ[Math.floor(Math.random()*3)],42,35);
+}
+function drawBg(){
+  for(let i=0;i<BN;i++){
+    by[i]+=bvy[i];if(by[i]>H+20){by[i]=-20;bx[i]=Math.random()*W;}
+    ctx.globalAlpha=ba[i];
+    ctx.drawImage(bcc[i],bx[i],by[i]);
+  }
+  ctx.globalAlpha=1;
+}
 
-// 剑的交锋编排（厮杀+落字阶段）
+// ═══════════════════════════════════════
+//  交锋关键帧
+//  坐标 0-1 归一化，sc 是大小缩放
+//  所有关键帧时间连续，不留空白
+// ═══════════════════════════════════════
 const KF=[
-  // 由远及近（小→大）
-  {t:9,   ax:.2,ay:.3,aa:0.6,  bx:.8,by:.3,ba:Math.PI-0.6, sc:.3},
-  {t:10,  ax:.35,ay:.35,aa:0.8, bx:.65,by:.35,ba:Math.PI-0.8, sc:.5, clash:true},
-  {t:10.8,ax:.15,ay:.5,aa:-0.5, bx:.85,by:.2,ba:Math.PI+0.5, sc:.6},
-  {t:11.8,ax:.55,ay:.25,aa:1.0, bx:.45,by:.55,ba:Math.PI-1.0, sc:.7, clash:true},
-  {t:12.5,ax:.75,ay:.6,aa:-0.3, bx:.25,by:.3,ba:Math.PI+0.3, sc:.8},
-  {t:13.5,ax:.45,ay:.4,aa:0.5,  bx:.55,by:.4,ba:Math.PI-0.5, sc:.85, clash:true},
-  {t:14.2,ax:.2,ay:.2,aa:1.8,   bx:.8,by:.7,ba:Math.PI-1.8, sc:.9},
-  {t:15,  ax:.6,ay:.6,aa:-0.7,  bx:.4,by:.3,ba:Math.PI+0.7, sc:.95, clash:true},
-  // 落字阶段：更密集的碰撞
-  {t:16,  ax:.5,ay:.45,aa:0.3,  bx:.5,by:.45,ba:Math.PI-0.3, sc:1.0, clash:true},
-  {t:16.5,ax:.3,ay:.55,aa:1.2,  bx:.7,by:.35,ba:Math.PI-1.2, sc:1.0},
-  {t:17,  ax:.55,ay:.3,aa:-0.4, bx:.45,by:.5,ba:Math.PI+0.4, sc:1.0, clash:true},
-  {t:17.5,ax:.48,ay:.42,aa:0.7, bx:.52,by:.42,ba:Math.PI-0.7, sc:1.0, clash:true},
-  {t:18,  ax:.35,ay:.35,aa:1.5, bx:.65,by:.55,ba:Math.PI-1.5, sc:1.0},
-  {t:18.5,ax:.5,ay:.4,aa:0.0,   bx:.5,by:.4,ba:Math.PI, sc:1.0, clash:true},
-  // 最终交叉定格
-  {t:19,  ax:.48,ay:.42,aa:.78,  bx:.52,by:.42,ba:Math.PI-.78, sc:1.0},
-  {t:19.8,ax:.48,ay:.42,aa:.78,  bx:.52,by:.42,ba:Math.PI-.78, sc:1.0, clash:true}, // 最后一击
-  // 归无：剑飞散
-  {t:21,  ax:.5,ay:.42,aa:.78,   bx:.5,by:.42,ba:Math.PI-.78, sc:0},
+  // 凝形完毕，双剑初现（静止定型）
+  {t:8,   ax:.3,ay:.45,aa:-.78, bx:.7,by:.45,ba:Math.PI+.78},
+  // 厮杀开始：双剑交锋
+  {t:9.5, ax:.42,ay:.4,aa:.5,   bx:.58,by:.4,ba:Math.PI-.5, clash:true},
+  {t:10.3,ax:.2,ay:.3,aa:-.8,   bx:.8,by:.55,ba:Math.PI+.8},
+  {t:11.2,ax:.55,ay:.5,aa:1.0,  bx:.45,by:.3,ba:Math.PI-1.0, clash:true},
+  {t:12,  ax:.75,ay:.25,aa:-.3, bx:.25,by:.6,ba:Math.PI+.3},
+  {t:13,  ax:.45,ay:.35,aa:.6,  bx:.55,by:.35,ba:Math.PI-.6, clash:true},
+  {t:13.8,ax:.15,ay:.55,aa:1.5, bx:.85,by:.35,ba:Math.PI-1.5},
+  {t:14.8,ax:.6,ay:.5,aa:-.7,   bx:.4,by:.35,ba:Math.PI+.7, clash:true},
+  {t:15.5,ax:.3,ay:.25,aa:1.2,  bx:.7,by:.6,ba:Math.PI-1.2},
+  {t:16.5,ax:.48,ay:.42,aa:.4,  bx:.52,by:.42,ba:Math.PI-.4, clash:true},
+  // 落字阶段：更密集
+  {t:17.2,ax:.65,ay:.3,aa:-1.0, bx:.35,by:.55,ba:Math.PI+1.0},
+  {t:17.8,ax:.5,ay:.38,aa:.2,   bx:.5,by:.38,ba:Math.PI-.2, clash:true},
+  {t:18.3,ax:.35,ay:.5,aa:1.3,  bx:.65,by:.3,ba:Math.PI-1.3},
+  {t:18.8,ax:.48,ay:.4,aa:.7,   bx:.52,by:.4,ba:Math.PI-.7, clash:true},
+  {t:19.3,ax:.55,ay:.45,aa:-.5, bx:.45,by:.35,ba:Math.PI+.5, clash:true},
+  {t:19.8,ax:.5,ay:.4,aa:.3,    bx:.5,by:.4,ba:Math.PI-.3, clash:true},
+  // 最终定格
+  {t:20.5,ax:.49,ay:.42,aa:.78, bx:.51,by:.42,ba:Math.PI-.78, clash:true},
+  // 归无
+  {t:22,  ax:.49,ay:.42,aa:.78, bx:.51,by:.42,ba:Math.PI-.78},
 ];
 
 function lerpKF(t){
@@ -378,68 +394,24 @@ function lerpKF(t){
   return{
     ax:a.ax+(b.ax-a.ax)*s, ay:a.ay+(b.ay-a.ay)*s, aa:a.aa+(b.aa-a.aa)*s,
     bx:a.bx+(b.bx-a.bx)*s, by:a.by+(b.by-a.by)*s, ba:a.ba+(b.ba-a.ba)*s,
-    sc:a.sc+(b.sc-a.sc)*s,
     clash:b.clash&&p>.8,
   };
 }
 
 // ═══════════════════════════════════════
-//  粒子状态更新
+//  凝形目标
 // ═══════════════════════════════════════
-function updateRain(t){
-  const phase=t<5?0:t<9?1:2; // 0=rain 1=gather 2=sword
-
-  for(let i=0;i<RAIN;i++){
-    rph[i]+=.02;
-    rrot[i]+=rrotv[i];
-
-    if(phase===0){ // 蓄势：文字雨
-      if(rstate[i]!==0)continue;
-      rx[i]+=rvx[i];ry[i]+=rvy[i];
-      if(ra[i]<.5)ra[i]+=.003;
-      if(ry[i]>H+20){ry[i]=-20-Math.random()*50;rx[i]=Math.random()*W;}
-    }
-    else if(phase===1){ // 凝形
-      if(rstate[i]===0) rstate[i]=1; // 切换
-      const dx=rtx[i]-rx[i],dy=rty[i]-ry[i];
-      const d=Math.sqrt(dx*dx+dy*dy)+.1;
-      const f=Math.min(.06,400/(d*d+50));
-      rvx[i]+=dx*f;rvy[i]+=dy*f;
-      rvx[i]*=.90;rvy[i]*=.90;
-      rx[i]+=rvx[i];ry[i]+=rvy[i];
-      if(ra[i]<.8)ra[i]+=.005;
-    }
-    else{ // sword阶段：粒子已凝入剑体，不单独渲染
-      if(rstate[i]!==2){rstate[i]=2;ra[i]=0;}
-    }
-  }
-}
-
-function drawRainParticles(){
-  for(let i=0;i<RAIN;i++){
-    if(ra[i]<.02||rstate[i]===2)continue;
-    const c=rcc[i],hs=c.width/2;
-    ctx.globalAlpha=ra[i];
-    ctx.drawImage(c,rx[i]-hs,ry[i]-hs);
-  }
-  ctx.globalAlpha=1;
-}
-
-// 分配凝形目标
+let gatherDone=false;
 function assignGatherTargets(){
-  const sl2=swordLen();
-  // 剑A 在左侧
-  const ptsA=swordPoints(W*.3,H*.5,-Math.PI/4,sl2,RAIN/2);
-  // 剑B 在右侧
-  const ptsB=swordPoints(W*.7,H*.5,Math.PI+Math.PI/4,sl2,RAIN/2);
+  const sl=baseSwordLen();
+  const ptsA=swordPoints(W*.3,H*.45,-.78,sl,N/2);
+  const ptsB=swordPoints(W*.7,H*.45,Math.PI+.78,sl,N/2);
   let ai=0,bi=0;
-  for(let i=0;i<RAIN;i++){
-    if(rside[i]===0){
-      const p=ptsA[ai%ptsA.length];
-      rtx[i]=p.x;rty[i]=p.y;ai++;
+  for(let i=0;i<N;i++){
+    if(psd[i]===0){
+      const p=ptsA[ai%ptsA.length];ptx[i]=p.x;pty[i]=p.y;ai++;
     }else{
-      const p=ptsB[bi%ptsB.length];
-      rtx[i]=p.x;rty[i]=p.y;bi++;
+      const p=ptsB[bi%ptsB.length];ptx[i]=p.x;pty[i]=p.y;bi++;
     }
   }
 }
@@ -448,34 +420,140 @@ function assignGatherTargets(){
 //  主循环
 // ═══════════════════════════════════════
 let started=false,startTime=0,frame=0;
-let lastClash=-999;
-let gatherAssigned=false;
-// 归无阶段的最终爆发
-let finalBurst=false;
+let lastClash=-999,finalBurst=false;
 
 function tick(){
   requestAnimationFrame(tick);
   frame++;
   if(!started){ctx.fillStyle='#080810';ctx.fillRect(0,0,W,H);return;}
-
   const t=(performance.now()-startTime)/1000;
 
-  // 凝形目标分配
-  if(t>=5&&!gatherAssigned){gatherAssigned=true;assignGatherTargets();}
+  // 凝形分配
+  if(t>=4.8&&!gatherDone){gatherDone=true;assignGatherTargets();}
 
-  // 清屏
   ctx.fillStyle='#080810';ctx.fillRect(0,0,W,H);
 
-  // ── 蓄势 & 凝形：文字雨粒子 ──
-  if(t<10){
-    updateRain(t);
-    drawRainParticles();
+  // 全程背景微雨
+  drawBg();
+
+  const zoom=getZoom(t);
+
+  // ─── 蓄势（0-5s）：文字暴雨 ───
+  if(t<5){
+    for(let i=0;i<N;i++){
+      px[i]+=pvx[i];py[i]+=pvy[i];
+      if(pa[i]<.5)pa[i]+=.003;
+      if(py[i]>H+20){py[i]=-20-Math.random()*50;px[i]=Math.random()*W;}
+      if(pa[i]>.02){
+        ctx.globalAlpha=pa[i];
+        ctx.drawImage(pcc[i],px[i]-pcc[i].width/2,py[i]-pcc[i].height/2);
+      }
+    }
+    ctx.globalAlpha=1;
   }
 
-  // ── 「儒」字 ──
-  if(t>.3&&t<6){
-    const ra2=t<1.5?(t-.3)/1.2:Math.max(0,1-(t-3)/3);
-    ctx.save();ctx.globalAlpha=ra2*.45;
+  // ─── 凝形（5-9s）：汇聚 + 镜头推近再拉远 ───
+  if(t>=5&&t<9){
+    // 中心点
+    const ccx=W/2, ccy=H*.45;
+    ctx.save();
+    ctx.translate(ccx,ccy);
+    ctx.scale(zoom,zoom);
+    ctx.translate(-ccx,-ccy);
+
+    for(let i=0;i<N;i++){
+      if(pst[i]===0)pst[i]=1;
+      const dx=ptx[i]-px[i],dy=pty[i]-py[i];
+      const d=Math.sqrt(dx*dx+dy*dy)+.1;
+      const gp=Math.min(t-5,4)/4; // 0→1 聚拢程度
+      const f=Math.min(.04+gp*.06,500/(d*d+40));
+      pvx[i]+=dx*f;pvy[i]+=dy*f;
+      pvx[i]*=.89;pvy[i]*=.89;
+      px[i]+=pvx[i];py[i]+=pvy[i];
+      if(pa[i]<.85)pa[i]+=.005;
+      ctx.globalAlpha=pa[i];
+      ctx.drawImage(pcc[i],px[i]-pcc[i].width/2,py[i]-pcc[i].height/2);
+    }
+    ctx.globalAlpha=1;
+
+    // 凝形后期画半透明剑轮廓
+    if(t>7){
+      const sa=(t-7)/2; // 0→1
+      const sl=baseSwordLen();
+      drawTextSword(W*.3,H*.45,-.78,sl,42,sa*.4,t,zoom);
+      drawTextSword(W*.7,H*.45,Math.PI+.78,sl,210,sa*.4,t,zoom);
+    }
+
+    ctx.restore();
+  }
+
+  // ─── 厮杀+落字（9-22s）：双剑 ───
+  if(t>=9&&t<22){
+    const kf=lerpKF(t);
+    const sl=baseSwordLen();
+    const aX=kf.ax*W,aY=kf.ay*H;
+    const bX=kf.bx*W,bY=kf.by*H;
+
+    // zoom 淡出
+    if(zoom>1.01){
+      const ccx=W/2,ccy=H*.45;
+      ctx.save();
+      ctx.translate(ccx,ccy);ctx.scale(zoom,zoom);ctx.translate(-ccx,-ccy);
+    }
+
+    // 残影
+    pushT(tA,aX,aY);pushT(tB,bX,bY);
+    drawTrail(tA,42);drawTrail(tB,210);
+
+    // 剑 alpha
+    let sA=1;
+    if(t<10)sA=(t-9);
+    if(t>20.5)sA=Math.max(0,1-(t-20.5)/1.5);
+
+    drawTextSword(aX,aY,kf.aa,sl,42,sA,t,1);
+    drawTextSword(bX,bY,kf.ba,sl,210,sA,t,1);
+
+    if(zoom>1.01) ctx.restore();
+
+    // 碰撞
+    if(kf.clash&&frame-lastClash>5){
+      lastClash=frame;
+      const cx=(aX+bX)/2,cy=(aY+bY)/2;
+      const n=t>17?65:40;
+      spawnFall(cx,cy,n,t>17?1.4:1);
+      addSpark(cx,cy,t>17?22:12);
+    }
+
+    // 碰撞闪光
+    if(kf.clash){
+      const cx=(kf.ax+kf.bx)/2*W,cy=(kf.ay+kf.by)/2*H;
+      const g=ctx.createRadialGradient(cx,cy,3,cx,cy,220);
+      g.addColorStop(0,'rgba(255,255,220,.35)');
+      g.addColorStop(.3,'rgba(255,200,120,.12)');
+      g.addColorStop(1,'rgba(200,150,80,0)');
+      ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+    }
+  }
+
+  // ─── 归无：最终爆发 ───
+  if(t>20.5&&!finalBurst){
+    finalBurst=true;
+    spawnFall(W*.5,H*.42,250,1.6);
+    addSpark(W*.5,H*.42,50);
+  }
+  // 落字阶段持续掉字
+  if(t>17&&t<21&&frame%3===0){
+    spawnFall(W*.5+(Math.random()-.5)*W*.3,H*.4+(Math.random()-.5)*H*.15,4,.5);
+  }
+
+  // 绘制落字+火花
+  updateDrawFall();
+  drawSparks();
+
+  // 「儒」字（蓄势阶段）
+  if(t>.5&&t<5.5){
+    const ra2=t<1.8?(t-.5)/1.3:Math.max(0,1-(t-3)/2.5);
+    ctx.save();ctx.globalAlpha=ra2*.4;
     ctx.font='110px "Songti SC","SimSun","KaiTi",serif';
     ctx.textAlign='center';ctx.textBaseline='middle';
     ctx.shadowColor='rgba(255,200,50,.35)';ctx.shadowBlur=40;
@@ -484,72 +562,14 @@ function tick(){
     ctx.shadowBlur=0;ctx.restore();
   }
 
-  // ── 厮杀+落字：双剑 ──
-  if(t>=8&&t<21){
-    const kf=lerpKF(t);
-    const sl2=swordLen()*kf.sc;
-    if(sl2>5){
-      const aX=kf.ax*W,aY=kf.ay*H;
-      const bX=kf.bx*W,bY=kf.by*H;
-
-      // 残影
-      pushT(tA,aX,aY);pushT(tB,bX,bY);
-      drawT(tA,42);drawT(tB,210);
-
-      // 剑的淡入/淡出
-      let sAlpha=1;
-      if(t<9) sAlpha=(t-8);
-      if(t>19.8) sAlpha=Math.max(0,1-(t-19.8)/1.2);
-
-      drawTextSword(aX,aY,kf.aa,sl2,42,sAlpha,t);
-      drawTextSword(bX,bY,kf.ba,sl2,210,sAlpha,t);
-
-      // 碰撞
-      if(kf.clash&&frame-lastClash>6){
-        lastClash=frame;
-        const cx2=(aX+bX)/2,cy2=(aY+bY)/2;
-        const n=t>16?60:40; // 落字阶段更多
-        spawnFall(cx2,cy2,n,t>16?1.3:1);
-        addSpark(cx2,cy2,t>16?20:12);
-      }
-
-      // 碰撞闪光
-      if(kf.clash){
-        const cx2=(kf.ax+kf.bx)/2*W,cy2=(kf.ay+kf.by)/2*H;
-        const g=ctx.createRadialGradient(cx2,cy2,3,cx2,cy2,200);
-        g.addColorStop(0,'rgba(255,255,220,.3)');
-        g.addColorStop(.3,'rgba(255,200,120,.1)');
-        g.addColorStop(1,'rgba(200,150,80,0)');
-        ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
-      }
-    }
-  }
-
-  // ── 归无：最终大爆发 ──
-  if(t>19.8&&!finalBurst){
-    finalBurst=true;
-    spawnFall(W*.5,H*.42,200,1.5);
-    addSpark(W*.5,H*.42,40);
-  }
-
-  // 持续落字效果（落字阶段）
-  if(t>16&&t<20&&frame%4===0){
-    spawnFall(W*.5+(Math.random()-.5)*W*.3,H*.4+(Math.random()-.5)*H*.2,5,.6);
-  }
-
-  // 更新绘制
-  updateFall();
-  drawFall();
-  drawSparks();
-
   // 暗角
   const vig=ctx.createRadialGradient(W/2,H/2,Math.min(W,H)*.15,W/2,H/2,Math.max(W,H)*.7);
-  vig.addColorStop(0,'rgba(0,0,0,0)');vig.addColorStop(1,'rgba(0,0,0,0.3)');
+  vig.addColorStop(0,'rgba(0,0,0,0)');vig.addColorStop(1,'rgba(0,0,0,0.28)');
   ctx.fillStyle=vig;ctx.fillRect(0,0,W,H);
 
-  // ── 归无文字 ──
-  if(t>23){
-    const ea=Math.min(.45,(t-23)/3);
+  // 归无文字
+  if(t>24){
+    const ea=Math.min(.45,(t-24)/3);
     ctx.save();ctx.globalAlpha=ea;ctx.textAlign='center';
     ctx.font='26px "Songti SC","SimSun","KaiTi",serif';
     ctx.fillStyle='rgba(200,180,120,1)';
@@ -561,14 +581,15 @@ function tick(){
   }
 }
 
-// 启动
+// ═══════════════════════════════════════
+//  启动
+// ═══════════════════════════════════════
 document.getElementById('playBtn').addEventListener('click',()=>{
   const b=document.getElementById('playBtn');
   b.style.opacity='0';setTimeout(()=>b.style.display='none',1200);
   started=true;startTime=performance.now();
   initAudio();
 },{once:true});
-
 window.addEventListener('resize',()=>{W=innerWidth;H=innerHeight;C.width=W;C.height=H;});
 C.addEventListener('touchstart',e=>e.preventDefault(),{passive:false});
 C.addEventListener('touchmove',e=>e.preventDefault(),{passive:false});
@@ -585,52 +606,49 @@ function initAudio(){
   dr.type='sawtooth';dr.frequency.value=42;
   dg.gain.setValueAtTime(0,ac.currentTime);
   dg.gain.linearRampToValueAtTime(.07,ac.currentTime+3);
-  dg.gain.setValueAtTime(.07,ac.currentTime+18);
-  dg.gain.linearRampToValueAtTime(0,ac.currentTime+23);
+  dg.gain.setValueAtTime(.07,ac.currentTime+20);
+  dg.gain.linearRampToValueAtTime(0,ac.currentTime+25);
   const lp=ac.createBiquadFilter();lp.type='lowpass';lp.frequency.value=110;
-  dr.connect(lp);lp.connect(dg);dg.connect(m);
-  dr.start();dr.stop(ac.currentTime+25);
-  // 汇聚上升音
+  dr.connect(lp);lp.connect(dg);dg.connect(m);dr.start();dr.stop(ac.currentTime+27);
+  // 凝形上升音
   setTimeout(()=>{
     const r=ac.createOscillator(),rg=ac.createGain();
-    r.type='sine';r.frequency.setValueAtTime(80,ac.currentTime);
-    r.frequency.exponentialRampToValueAtTime(500,ac.currentTime+4);
+    r.type='sine';r.frequency.setValueAtTime(70,ac.currentTime);
+    r.frequency.exponentialRampToValueAtTime(450,ac.currentTime+4);
     rg.gain.setValueAtTime(.04,ac.currentTime);
     rg.gain.exponentialRampToValueAtTime(.001,ac.currentTime+4);
     r.connect(rg);rg.connect(m);r.start();r.stop(ac.currentTime+4.5);
   },5000);
-  // 碰撞音
-  const clashTs=[10,11.8,13.5,15,16,17,17.5,18.5,19.8];
+  // 碰撞音效
+  const clashTs=[9.5,11.2,13,14.8,16.5,17.8,18.8,19.3,19.8,20.5];
   clashTs.forEach(ct=>{
     setTimeout(()=>{
-      const sz2=ac.sampleRate*(ct>16?.1:.06);
-      const b=ac.createBuffer(1,sz2,ac.sampleRate),d=b.getChannelData(0);
-      for(let i=0;i<sz2;i++)d[i]=(Math.random()*2-1)*Math.exp(-i/sz2*8);
+      const sz=ac.sampleRate*(ct>17?.12:.07);
+      const b=ac.createBuffer(1,sz,ac.sampleRate),d=b.getChannelData(0);
+      for(let i=0;i<sz;i++)d[i]=(Math.random()*2-1)*Math.exp(-i/sz*8);
       const s=ac.createBufferSource();s.buffer=b;
-      const g=ac.createGain();g.gain.value=ct>16?.25:.18;
+      const g=ac.createGain();g.gain.value=ct>17?.25:.18;
       s.connect(g);g.connect(m);s.start();
-      // 金属共鸣
-      const ring=ac.createOscillator(),rg2=ac.createGain();
+      const ring=ac.createOscillator(),rg=ac.createGain();
       ring.type='sine';ring.frequency.value=700+Math.random()*500;
-      rg2.gain.setValueAtTime(.06,ac.currentTime);
-      rg2.gain.exponentialRampToValueAtTime(.001,ac.currentTime+.5);
-      ring.connect(rg2);rg2.connect(m);ring.start();ring.stop(ac.currentTime+.6);
+      rg.gain.setValueAtTime(.06,ac.currentTime);
+      rg.gain.exponentialRampToValueAtTime(.001,ac.currentTime+.5);
+      ring.connect(rg);rg.connect(m);ring.start();ring.stop(ac.currentTime+.6);
     },ct*1000);
   });
-  // 19.8s 最终碎裂
+  // 最终碎裂
   setTimeout(()=>{
-    const sz2=ac.sampleRate*.6,b=ac.createBuffer(1,sz2,ac.sampleRate),d=b.getChannelData(0);
-    for(let i=0;i<sz2;i++)d[i]=(Math.random()*2-1)*Math.exp(-i/sz2*3.5);
+    const sz=ac.sampleRate*.6,b=ac.createBuffer(1,sz,ac.sampleRate),d=b.getChannelData(0);
+    for(let i=0;i<sz;i++)d[i]=(Math.random()*2-1)*Math.exp(-i/sz*3.5);
     const s=ac.createBufferSource();s.buffer=b;
-    const g=ac.createGain();g.gain.value=.4;
-    s.connect(g);g.connect(m);s.start();
+    const g=ac.createGain();g.gain.value=.4;s.connect(g);g.connect(m);s.start();
     const imp=ac.createOscillator(),ig=ac.createGain();
     imp.type='sine';imp.frequency.setValueAtTime(100,ac.currentTime);
     imp.frequency.exponentialRampToValueAtTime(18,ac.currentTime+.7);
     ig.gain.setValueAtTime(.35,ac.currentTime);
     ig.gain.exponentialRampToValueAtTime(.001,ac.currentTime+1);
     imp.connect(ig);ig.connect(m);imp.start();imp.stop(ac.currentTime+1.2);
-  },19800);
+  },20500);
   // 余韵
   setTimeout(()=>{
     [196,294,392,523].forEach((f,i)=>{
@@ -641,7 +659,7 @@ function initAudio(){
       g.gain.exponentialRampToValueAtTime(.001,ac.currentTime+5);
       o.connect(g);g.connect(m);o.start(ac.currentTime+i*.5);o.stop(ac.currentTime+6);
     });
-  },20500);
+  },21500);
 }
 </script>
 </body>
