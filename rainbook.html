@@ -3,13 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>雨書 · Rain Book</title>
+<title>雨畫 · Rain Painting</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-body{background:#e8e0d0;overflow:hidden;touch-action:none}
+body{background:#d8d0c0;overflow:hidden;touch-action:none}
 canvas{display:block}
 #p{position:fixed;top:0;left:0;width:100%;height:100%;z-index:1000;
-  background:rgba(232,224,208,.96);display:flex;align-items:center;justify-content:center;
+  background:rgba(216,208,192,.96);display:flex;align-items:center;justify-content:center;
   cursor:pointer;transition:opacity 1.5s}
 #p .i{text-align:center;color:#5a4a3a}
 #p .t{font:36px "Songti SC","SimSun","KaiTi",serif;letter-spacing:10px;margin-bottom:12px}
@@ -24,267 +24,507 @@ canvas{display:block}
 </head>
 <body>
 <div id="p"><div class="i">
-  <div class="t">雨 書</div>
-  <div class="s">雨落古卷 · 墨散成水 · 纸上空留</div>
+  <div class="t">雨 畫</div>
+  <div class="s">雨打丹青 · 墨隨水散 · 畫歸虛無</div>
   <div class="c"><div class="r"></div></div>
 </div></div>
 <canvas id="c"></canvas>
 <script>
 const C=document.getElementById('c'),ctx=C.getContext('2d');
 let W=innerWidth,H=innerHeight;C.width=W;C.height=H;
-const F='"Songti SC","SimSun","KaiTi",serif';
+const FT='"Songti SC","SimSun","KaiTi",serif';
 
 // ═══════════════════════════════════════
-//  诗经·关雎
+//  古画：预渲染到离屏 canvas
+//  山水画 + 题诗（竖排）
 // ═══════════════════════════════════════
-const poem=[
-  '關關雎鳩','在河之洲','窈窕淑女','君子好逑',
-  '參差荇菜','左右流之','窈窕淑女','寤寐求之',
-  '求之不得','寤寐思服','悠哉悠哉','輾轉反側',
-  '參差荇菜','左右采之','窈窕淑女','琴瑟友之',
-  '參差荇菜','左右芼之','窈窕淑女','鐘鼓樂之',
-];
+let paintCv,paintCtx,PW,PH;
+let paintAngle=-0.12; // 倾斜角度(弧度)
+let paintCX,paintCY; // 画在屏幕的中心
 
-// ═══════════════════════════════════════
-//  古籍排版
-// ═══════════════════════════════════════
-let bookX,bookY,bookW,bookH,charSz,colGap,rowGap;
-let chars=[]; // {ch,x,y,ink:1→0,wet:0→1}
+// 画面上的「墨点」— 构成山水画的基本单元
+let inkDots=[]; // {x,y,r,alpha,hue,sat,lit,dissolved:0}
+// 诗文字符
+let poemChars=[]; // {ch,x,y,sz,alpha,dissolved:0}
+// 印章
+let seals=[]; // {x,y,sz,alpha,dissolved:0}
 
-function layout(){
+// 诗：王维《山居秋暝》
+const poemText=['空','山','新','雨','後','天','氣','晚','來','秋',
+  '明','月','松','間','照','清','泉','石','上','流'];
+
+function buildPainting(){
   const s=Math.min(W,H);
-  charSz=Math.max(14,Math.floor(s*.035));
-  colGap=charSz*1.7;
-  rowGap=charSz*1.45;
-  const cols=poem.length;
-  const rows=4;
-  bookW=cols*colGap+colGap*.8;
-  bookH=rows*rowGap+charSz*2.5;
-  bookX=(W-bookW)/2;
-  bookY=(H-bookH)/2-H*.02;
-  chars=[];
-  for(let c=0;c<cols;c++){
-    const line=poem[c];
-    for(let r=0;r<line.length;r++){
-      // 竖排从右到左
-      const x=bookX+bookW-colGap*(c+.8);
-      const y=bookY+charSz*1.5+r*rowGap;
-      chars.push({ch:line[r],x,y,ink:1,wet:0,dissolveRate:0});
+  // 画幅尺寸（竖轴，3:4）
+  PW=Math.floor(s*.55);
+  PH=Math.floor(PW*1.35);
+  paintCX=W/2;
+  paintCY=H/2;
+
+  paintCv=document.createElement('canvas');
+  paintCv.width=PW;paintCv.height=PH;
+  paintCtx=paintCv.getContext('2d');
+  const g=paintCtx;
+
+  // — 宣纸底 —
+  g.fillStyle='#f2e8d0';
+  g.fillRect(0,0,PW,PH);
+  // 纸纹
+  g.globalAlpha=.03;g.strokeStyle='#a09070';g.lineWidth=.5;
+  for(let i=0;i<PH;i+=2){g.beginPath();g.moveTo(0,i);g.lineTo(PW,i);g.stroke();}
+  g.globalAlpha=1;
+
+  inkDots=[];poemChars=[];seals=[];
+
+  // — 山水画 —
+  // 远山（淡墨）
+  drawMountain(g, PW*.1, PH*.25, PW*.8, PH*.12, .08, '#8a9a7a');
+  drawMountain(g, PW*.0, PH*.3, PW*.6, PH*.1, .1, '#7a8a6a');
+  drawMountain(g, PW*.35,PH*.28,PW*.7, PH*.13,.12,'#6a7a5a');
+  // 近山（浓墨）
+  drawMountain(g, PW*-.1,PH*.45,PW*.5, PH*.2, .2, '#4a5a3a');
+  drawMountain(g, PW*.4, PH*.42,PW*.65,PH*.22,.25,'#3a4a2a');
+  // 树（松）
+  drawPines(g, PW*.15, PH*.42, 5);
+  drawPines(g, PW*.6, PH*.4, 3);
+  // 水/溪流
+  drawStream(g, PW*.3, PH*.58, PW*.4, PH*.08);
+  // 月
+  drawMoon(g, PW*.72, PH*.15, PW*.04);
+  // 石头
+  drawRocks(g, PW*.45, PH*.55, PW*.06);
+  drawRocks(g, PW*.2, PH*.6, PW*.04);
+
+  // — 题诗（右侧竖排）—
+  const pSz=Math.floor(PW*.035);
+  const startX=PW*.88;
+  const startY=PH*.15;
+  const lineGap=pSz*1.6;
+  const charGap=pSz*1.35;
+  // 两列，每列10字
+  for(let col=0;col<2;col++){
+    for(let row=0;row<10;row++){
+      const idx=col*10+row;
+      if(idx>=poemText.length)break;
+      const cx=startX-col*lineGap;
+      const cy=startY+row*charGap;
+      g.globalAlpha=.75;
+      g.font=pSz+'px '+FT;
+      g.textAlign='center';g.textBaseline='middle';
+      g.fillStyle='#2a2218';
+      g.fillText(poemText[idx],cx,cy);
+      poemChars.push({ch:poemText[idx],x:cx,y:cy,sz:pSz,alpha:.75,dissolved:0});
+    }
+  }
+
+  // — 印章 —
+  const sealSz=Math.floor(PW*.04);
+  drawSeal(g,PW*.85,PH*.72,sealSz);
+  seals.push({x:PW*.85,y:PH*.72,sz:sealSz,alpha:.7,dissolved:0});
+
+  g.globalAlpha=1;
+}
+
+function drawMountain(g,sx,sy,w,h,opacity,color){
+  const pts=[];
+  const steps=20;
+  for(let i=0;i<=steps;i++){
+    const t=i/steps;
+    const x=sx+t*w;
+    const y=sy-Math.sin(t*Math.PI)*h*(0.6+Math.random()*.8);
+    pts.push({x,y});
+  }
+  // 用墨点构成山体
+  for(let i=0;i<pts.length-1;i++){
+    const p0=pts[i],p1=pts[i+1];
+    const fillH=sy-Math.min(p0.y,p1.y);
+    for(let j=0;j<8;j++){
+      const t=Math.random();
+      const x=p0.x+t*(p1.x-p0.x);
+      const y=p0.y+t*(p1.y-p0.y)+Math.random()*fillH*.6;
+      if(y>sy+h*.3)continue;
+      const r=1+Math.random()*3;
+      const a=opacity*(0.3+Math.random()*.7);
+      g.globalAlpha=a;
+      g.fillStyle=color;
+      g.beginPath();g.arc(x,y,r,0,Math.PI*2);g.fill();
+      inkDots.push({x,y,r,alpha:a,color,dissolved:0});
+    }
+  }
+  // 山的轮廓线
+  g.globalAlpha=opacity*.8;
+  g.strokeStyle=color;g.lineWidth=1;
+  g.beginPath();g.moveTo(pts[0].x,sy);
+  pts.forEach(p=>g.lineTo(p.x,p.y));
+  g.lineTo(pts[pts.length-1].x,sy);g.stroke();
+  // 轮廓线也加入墨点
+  pts.forEach(p=>{
+    inkDots.push({x:p.x,y:p.y,r:.8,alpha:opacity*.6,color,dissolved:0});
+  });
+}
+
+function drawPines(g,bx,by,count){
+  for(let k=0;k<count;k++){
+    const x=bx+k*PW*.05+(Math.random()-.5)*PW*.02;
+    const y=by-(Math.random()*.03)*PH;
+    // 树干
+    const th=PH*(.06+Math.random()*.04);
+    g.globalAlpha=.3;g.strokeStyle='#3a2a1a';g.lineWidth=1.5;
+    g.beginPath();g.moveTo(x,y);g.lineTo(x+(Math.random()-.5)*3,y-th);g.stroke();
+    for(let i=0;i<8;i++){
+      const ty=y-th*.3-i*th*.08;
+      const tx=x+(Math.random()-.5)*2;
+      inkDots.push({x:tx,y:ty,r:.6,alpha:.25,color:'#3a2a1a',dissolved:0});
+    }
+    // 松针（散点）
+    for(let i=0;i<25;i++){
+      const angle=Math.random()*Math.PI*2;
+      const dist=Math.random()*PW*.025;
+      const lx=x+Math.cos(angle)*dist;
+      const ly=y-th*.6+Math.sin(angle)*dist*.7;
+      const r=.5+Math.random()*1.5;
+      const a=.1+Math.random()*.15;
+      g.globalAlpha=a;g.fillStyle='#3a5a2a';
+      g.beginPath();g.arc(lx,ly,r,0,Math.PI*2);g.fill();
+      inkDots.push({x:lx,y:ly,r,alpha:a,color:'#3a5a2a',dissolved:0});
     }
   }
 }
-layout();
+
+function drawStream(g,sx,sy,w,h){
+  g.globalAlpha=.06;g.strokeStyle='#5a7a8a';g.lineWidth=.8;
+  for(let i=0;i<8;i++){
+    const y=sy+i*h/8;
+    g.beginPath();
+    for(let x=sx;x<sx+w;x+=5){
+      const yy=y+Math.sin((x-sx)*.03+i)*3;
+      x===sx?g.moveTo(x,yy):g.lineTo(x,yy);
+    }
+    g.stroke();
+    // 水纹墨点
+    for(let x=sx;x<sx+w;x+=10+Math.random()*10){
+      inkDots.push({x,y:y+Math.random()*3,r:.4,alpha:.04,color:'#5a7a8a',dissolved:0});
+    }
+  }
+}
+
+function drawMoon(g,cx,cy,r){
+  g.globalAlpha=.08;
+  g.fillStyle='#e8dcc0';
+  g.beginPath();g.arc(cx,cy,r,0,Math.PI*2);g.fill();
+  g.globalAlpha=.04;
+  g.beginPath();g.arc(cx,cy,r*2,0,Math.PI*2);g.fill();
+  inkDots.push({x:cx,y:cy,r:r*.8,alpha:.06,color:'#e8dcc0',dissolved:0});
+}
+
+function drawRocks(g,cx,cy,sz){
+  g.globalAlpha=.2;g.fillStyle='#5a5040';
+  g.beginPath();
+  g.moveTo(cx-sz,cy+sz*.3);
+  g.quadraticCurveTo(cx-sz*.5,cy-sz,cx+sz*.3,cy-sz*.6);
+  g.quadraticCurveTo(cx+sz,cy-sz*.2,cx+sz*.8,cy+sz*.3);
+  g.closePath();g.fill();
+  // 皴法
+  for(let i=0;i<12;i++){
+    const x=cx+(Math.random()-.5)*sz*1.5;
+    const y=cy+(Math.random()-.5)*sz*.6;
+    inkDots.push({x,y,r:.5+Math.random(),alpha:.12+Math.random()*.1,color:'#5a5040',dissolved:0});
+  }
+}
+
+function drawSeal(g,cx,cy,sz){
+  g.globalAlpha=.6;g.fillStyle='#c83030';
+  g.fillRect(cx-sz,cy-sz,sz*2,sz*2);
+  g.globalAlpha=.5;g.font=(sz*.8)+'px '+FT;
+  g.textAlign='center';g.textBaseline='middle';
+  g.fillStyle='#f0e0c0';
+  g.fillText('詩',cx,cy);
+}
 
 // ═══════════════════════════════════════
-//  雨滴
+//  雨滴系统（落在画上）
 // ═══════════════════════════════════════
-const RN=120;
-const rx=new Float32Array(RN),ry=new Float32Array(RN);
-const rvy=new Float32Array(RN),rlen=new Float32Array(RN);
-const ral=new Float32Array(RN);
+const RN=80;
+const rdx=new Float32Array(RN),rdy=new Float32Array(RN);
+const rdvy=new Float32Array(RN),rdal=new Float32Array(RN),rdlen=new Float32Array(RN);
 function initRain(){
   for(let i=0;i<RN;i++){
-    rx[i]=Math.random()*W;
-    ry[i]=-Math.random()*H;
-    rvy[i]=4+Math.random()*6;
-    rlen[i]=10+Math.random()*20;
-    ral[i]=.06+Math.random()*.1;
+    rdx[i]=Math.random()*W;rdy[i]=-Math.random()*H;
+    rdvy[i]=5+Math.random()*7;rdlen[i]=12+Math.random()*18;
+    rdal[i]=.05+Math.random()*.08;
   }
 }
 initRain();
 
-// 雨滴落在书上 → 溅开的涟漪
-const RM=80;
-const rpx=new Float32Array(RM),rpy=new Float32Array(RM);
-const rpr=new Float32Array(RM),rpa=new Float32Array(RM);
-let rpc=0;
+// 画面上的水滴积累
+let waterLevel=0; // 0→1 总水量
+const WM=200; // 水渍
+let wx=new Float32Array(WM),wy=new Float32Array(WM);
+let wr=new Float32Array(WM),wa=new Float32Array(WM);
+let wc=0;
 
-function addRipple(x,y){
-  if(rpc>=RM)rpc=0; // 循环覆盖
-  rpx[rpc]=x;rpy[rpc]=y;
-  rpr[rpc]=0;rpa[rpc]=.3;
-  rpc++;
+// 把屏幕坐标转换到画面坐标
+function screenToPaint(sx2,sy2){
+  const dx=sx2-paintCX,dy=sy2-paintCY;
+  const cos=Math.cos(-paintAngle),sin=Math.sin(-paintAngle);
+  return {x:dx*cos-dy*sin+PW/2, y:dx*sin+dy*cos+PH/2};
 }
 
-function updateRain(t){
+function addWaterMark(px2,py2){
+  if(wc>=WM)wc=0;
+  wx[wc]=px2;wy[wc]=py2;
+  wr[wc]=3+Math.random()*8;
+  wa[wc]=.15+Math.random()*.1;
+  wc++;
+}
+
+function updateRain(){
   for(let i=0;i<RN;i++){
-    ry[i]+=rvy[i];
-    if(ry[i]>H+20){
-      ry[i]=-rlen[i];
-      rx[i]=Math.random()*W;
-      rvy[i]=4+Math.random()*6;
-    }
-    // 雨滴落在书页范围内
-    if(ry[i]>=bookY&&ry[i]<=bookY+bookH&&rx[i]>=bookX&&rx[i]<=bookX+bookW){
-      // 检查是否打到文字附近
-      for(let j=0;j<chars.length;j++){
-        const c=chars[j];
-        if(c.ink<=0)continue;
-        const dx=rx[i]-c.x,dy=ry[i]-c.y;
-        if(Math.abs(dx)<charSz*.6&&Math.abs(dy)<charSz*.6){
-          // 打湿这个字 → 加速溶解
-          c.wet=Math.min(1,c.wet+.015);
-          c.dissolveRate=Math.max(c.dissolveRate,.002+c.wet*.003);
-        }
+    rdy[i]+=rdvy[i];
+    if(rdy[i]>H+20){rdy[i]=-rdlen[i];rdx[i]=Math.random()*W;rdvy[i]=5+Math.random()*7;}
+    // 检查是否落在画面范围内
+    const pp=screenToPaint(rdx[i],rdy[i]);
+    if(pp.x>-10&&pp.x<PW+10&&pp.y>-10&&pp.y<PH+10){
+      if(rdy[i]>paintCY-PH*.5&&Math.random()<.02){
+        addWaterMark(pp.x,pp.y);
+        waterLevel=Math.min(1,waterLevel+.0003);
       }
-      // 溅起涟漪
-      if(Math.random()<.03) addRipple(rx[i],ry[i]);
     }
   }
 }
 
-function drawRain(){
-  ctx.strokeStyle='rgba(140,160,180,.12)';
-  ctx.lineWidth=1;
+function drawRain2(){
+  ctx.strokeStyle='rgba(140,155,170,.1)';ctx.lineWidth=1;
   for(let i=0;i<RN;i++){
-    ctx.globalAlpha=ral[i];
-    ctx.beginPath();
-    ctx.moveTo(rx[i],ry[i]);
-    ctx.lineTo(rx[i],ry[i]-rlen[i]);
-    ctx.stroke();
-  }
-  ctx.globalAlpha=1;
-}
-
-function drawRipples(){
-  for(let i=0;i<rpc;i++){
-    if(rpa[i]<.01)continue;
-    rpr[i]+=.4;
-    rpa[i]-=.005;
-    ctx.globalAlpha=rpa[i];
-    ctx.strokeStyle='rgba(160,175,190,.3)';
-    ctx.lineWidth=.8;
-    ctx.beginPath();
-    ctx.ellipse(rpx[i],rpy[i],rpr[i],rpr[i]*.3,0,0,Math.PI*2);
-    ctx.stroke();
+    ctx.globalAlpha=rdal[i];
+    ctx.beginPath();ctx.moveTo(rdx[i],rdy[i]);ctx.lineTo(rdx[i],rdy[i]-rdlen[i]);ctx.stroke();
   }
   ctx.globalAlpha=1;
 }
 
 // ═══════════════════════════════════════
-//  墨水溶解流淌的痕迹
+//  流淌的墨水（从画上流下来）
 // ═══════════════════════════════════════
-const IM=500;
-const ix=new Float32Array(IM),iy=new Float32Array(IM);
-const ivx=new Float32Array(IM),ivy=new Float32Array(IM);
-const ia=new Float32Array(IM),isz=new Float32Array(IM);
-let ic=0;
+const DM=400;
+let dripX=new Float32Array(DM),dripY=new Float32Array(DM);
+let dripVx=new Float32Array(DM),dripVy=new Float32Array(DM);
+let dripA=new Float32Array(DM),dripR=new Float32Array(DM);
+let dripC=new Array(DM);
+let dripN=0;
 
-function spawnInk(x,y){
-  if(ic>=IM)return;
-  ix[ic]=x+(Math.random()-.5)*charSz*.3;
-  iy[ic]=y+(Math.random()-.5)*charSz*.2;
-  ivx[ic]=(Math.random()-.5)*.15;
-  ivy[ic]=.2+Math.random()*.4; // 向下流
-  ia[ic]=.15+Math.random()*.15;
-  isz[ic]=1+Math.random()*2;
-  ic++;
+function addDrip(px2,py2,color){
+  if(dripN>=DM)return;
+  dripX[dripN]=px2;dripY[dripN]=py2;
+  // 沿着画的倾斜方向流
+  dripVx[dripN]=(Math.random()-.5)*.3+Math.sin(paintAngle)*1.5;
+  dripVy[dripN]=.5+Math.random()*1+Math.cos(paintAngle)*1.5;
+  dripA[dripN]=.2+Math.random()*.15;
+  dripR[dripN]=.5+Math.random()*2;
+  dripC[dripN]=color||'#3a3a2a';
+  dripN++;
 }
 
-function updateDrawInk(){
+// ═══════════════════════════════════════
+//  主绘制：离屏画布 + 溶解 + 合成到主canvas
+// ═══════════════════════════════════════
+let dissolveFactor=0; // 0→1 总体溶解程度
+let phaseTime=0; // 用于阶段控制
+
+function drawScene(t){
+  // --- 更新溶解 ---
+  // 阶段1(0-8s): 雨滴零星，画面完好，偶尔晕染
+  // 阶段2(8-18s): 雨水渐多，墨色开始散
+  // 阶段3(18s+): 大面积溶解
+  if(t<8){
+    dissolveFactor=t/8*.05;
+  }else if(t<18){
+    dissolveFactor=.05+(t-8)/10*.4;
+  }else{
+    dissolveFactor=Math.min(1,.45+(t-18)/12*.55);
+  }
+
+  // 更新墨点溶解
+  inkDots.forEach(d=>{
+    // 靠近水渍的点溶解更快
+    let nearWater=0;
+    for(let i=0;i<wc;i++){
+      const dx2=d.x-wx[i],dy2=d.y-wy[i];
+      const dist=Math.sqrt(dx2*dx2+dy2*dy2);
+      if(dist<wr[i]*3) nearWater+=wa[i]*(1-dist/(wr[i]*3));
+    }
+    d.dissolved=Math.min(1,d.dissolved+dissolveFactor*.002+nearWater*.01);
+    // 溶解时产生流淌墨水
+    if(d.dissolved>.3&&d.dissolved<.95&&Math.random()<.001*dissolveFactor){
+      addDrip(d.x,d.y,d.color);
+    }
+  });
+
+  // 更新诗文字溶解
+  poemChars.forEach(c=>{
+    let nearWater=0;
+    for(let i=0;i<wc;i++){
+      const dx2=c.x-wx[i],dy2=c.y-wy[i];
+      const dist=Math.sqrt(dx2*dx2+dy2*dy2);
+      if(dist<wr[i]*4) nearWater+=wa[i]*(1-dist/(wr[i]*4));
+    }
+    c.dissolved=Math.min(1,c.dissolved+dissolveFactor*.0015+nearWater*.008);
+  });
+
+  // 更新印章溶解
+  seals.forEach(s=>{
+    s.dissolved=Math.min(1,s.dissolved+dissolveFactor*.001);
+  });
+
+  // --- 重绘离屏画布 ---
+  const g=paintCtx;
+  // 宣纸底
+  g.globalAlpha=1;g.fillStyle='#f2e8d0';g.fillRect(0,0,PW,PH);
+  // 纸纹
+  g.globalAlpha=.03;g.strokeStyle='#a09070';g.lineWidth=.5;
+  for(let i=0;i<PH;i+=3){g.beginPath();g.moveTo(0,i);g.lineTo(PW,i);g.stroke();}
+
+  // 水渍
+  for(let i=0;i<wc;i++){
+    if(wa[i]<.01)continue;
+    g.globalAlpha=wa[i]*.3;
+    g.fillStyle='rgba(180,190,195,.3)';
+    g.beginPath();g.arc(wx[i],wy[i],wr[i],0,Math.PI*2);g.fill();
+    // 晕染扩散
+    g.globalAlpha=wa[i]*.1;
+    g.beginPath();g.arc(wx[i],wy[i],wr[i]*2,0,Math.PI*2);g.fill();
+    wa[i]-=.0002; // 水渍慢慢干
+  }
+
+  // 墨点
+  inkDots.forEach(d=>{
+    const a=d.alpha*(1-d.dissolved);
+    if(a<.005)return;
+    g.globalAlpha=a;
+    g.fillStyle=d.color;
+    // 溶解时扩散
+    const spread=1+d.dissolved*2;
+    g.beginPath();g.arc(d.x,d.y,d.r*spread,0,Math.PI*2);g.fill();
+    if(d.dissolved>.2){
+      g.globalAlpha=a*.3;
+      g.beginPath();g.arc(d.x,d.y+d.dissolved*3,d.r*spread*1.5,0,Math.PI*2);g.fill();
+    }
+  });
+
+  // 诗文字
+  poemChars.forEach(c=>{
+    const a=c.alpha*(1-c.dissolved);
+    if(a<.01)return;
+    g.globalAlpha=a;
+    g.font=c.sz+'px '+FT;g.textAlign='center';g.textBaseline='middle';
+    g.fillStyle='#2a2218';
+    if(c.dissolved>.1){
+      g.shadowColor='rgba(42,34,24,'+a*.5+')';
+      g.shadowBlur=c.dissolved*c.sz*.8;
+    }
+    g.fillText(c.ch,c.x,c.y+c.dissolved*4);
+    g.shadowBlur=0;
+  });
+
+  // 印章
+  seals.forEach(s=>{
+    const a=s.alpha*(1-s.dissolved);
+    if(a<.02)return;
+    g.globalAlpha=a;
+    const spread=1+s.dissolved;
+    g.fillStyle='rgba(200,48,48,'+a+')';
+    g.fillRect(s.x-s.sz*spread,s.y-s.sz*spread,s.sz*2*spread,s.sz*2*spread);
+    if(a>.1){
+      g.globalAlpha=a*.7;g.font=(s.sz*.8)+'px '+FT;
+      g.textAlign='center';g.textBaseline='middle';
+      g.fillStyle='#f0e0c0';g.fillText('詩',s.x,s.y);
+    }
+  });
+
+  // 边框
+  g.globalAlpha=.1*(1-dissolveFactor*.6);
+  g.strokeStyle='#6a5a4a';g.lineWidth=1.5;
+  g.strokeRect(6,6,PW-12,PH-12);
+  g.globalAlpha=1;
+
+  // --- 合成到主canvas（倾斜放置）---
+  ctx.save();
+  ctx.translate(paintCX,paintCY);
+  ctx.rotate(paintAngle);
+  // 画框阴影
+  ctx.shadowColor='rgba(0,0,0,.12)';ctx.shadowBlur=30;ctx.shadowOffsetY=8;ctx.shadowOffsetX=-4;
+  ctx.drawImage(paintCv,-PW/2,-PH/2);
+  ctx.shadowBlur=0;
+  ctx.restore();
+
+  // --- 流淌的墨水（屏幕空间）---
   let alive=0;
-  for(let i=0;i<ic;i++){
-    ix[i]+=ivx[i];iy[i]+=ivy[i];
-    ivy[i]+=.01; // 微重力
-    ivx[i]*=.99;
-    ia[i]-=.0008;
-    if(ia[i]<.005||iy[i]>bookY+bookH+50)continue;
-    ctx.globalAlpha=ia[i];
-    ctx.fillStyle='rgba(50,40,30,.6)';
-    ctx.beginPath();ctx.arc(ix[i],iy[i],isz[i],0,Math.PI*2);ctx.fill();
-    if(alive!==i){ix[alive]=ix[i];iy[alive]=iy[i];ivx[alive]=ivx[i];ivy[alive]=ivy[i];
-      ia[alive]=ia[i];isz[alive]=isz[i];}
+  for(let i=0;i<dripN;i++){
+    // 画面坐标→屏幕坐标
+    const cos=Math.cos(paintAngle),sin=Math.sin(paintAngle);
+    const sx2=(dripX[i]-PW/2)*cos-(dripY[i]-PH/2)*sin+paintCX;
+    const sy2=(dripX[i]-PW/2)*sin+(dripY[i]-PH/2)*cos+paintCY;
+    dripVy[i]+=.03;
+    dripX[i]+=dripVx[i];dripY[i]+=dripVy[i];
+    dripA[i]-=.001;
+    if(dripA[i]<.005||sy2>H+20)continue;
+    ctx.globalAlpha=dripA[i];
+    ctx.fillStyle=dripC[i];
+    ctx.beginPath();ctx.arc(sx2,sy2,dripR[i],0,Math.PI*2);ctx.fill();
+    if(alive!==i){dripX[alive]=dripX[i];dripY[alive]=dripY[i];dripVx[alive]=dripVx[i];
+      dripVy[alive]=dripVy[i];dripA[alive]=dripA[i];dripR[alive]=dripR[i];dripC[alive]=dripC[i];}
     alive++;
   }
-  ic=alive;ctx.globalAlpha=1;
+  dripN=alive;ctx.globalAlpha=1;
 }
 
 // ═══════════════════════════════════════
-//  绘制古籍书页
+//  结语
 // ═══════════════════════════════════════
-function drawBook(){
-  const bx=bookX-charSz*1.2,by=bookY-charSz*1.2;
-  const bw=bookW+charSz*2.4,bh=bookH+charSz*2.4;
-
-  // 阴影
-  ctx.save();
-  ctx.shadowColor='rgba(0,0,0,.1)';ctx.shadowBlur=25;ctx.shadowOffsetY=6;
-  ctx.fillStyle='#efe5cb';
-  ctx.fillRect(bx,by,bw,bh);
-  ctx.shadowBlur=0;ctx.restore();
-
-  // 纸纹
-  ctx.globalAlpha=.025;
-  ctx.strokeStyle='#9a8a6a';ctx.lineWidth=.5;
-  for(let i=0;i<bh;i+=2.5){
-    ctx.beginPath();ctx.moveTo(bx,by+i);ctx.lineTo(bx+bw,by+i);ctx.stroke();
-  }
-
-  // 湿痕（整体）
-  ctx.globalAlpha=.04;
-  ctx.fillStyle='rgba(150,165,175,.5)';
-  for(let i=0;i<chars.length;i++){
-    const c=chars[i];
-    if(c.wet>.05){
-      ctx.globalAlpha=c.wet*.06;
-      ctx.beginPath();
-      ctx.ellipse(c.x,c.y,charSz*.6+c.wet*charSz*.3,charSz*.7+c.wet*charSz*.4,0,0,Math.PI*2);
-      ctx.fill();
-    }
-  }
-
-  // 外框
-  ctx.globalAlpha=.12;
-  ctx.strokeStyle='#6a5a4a';ctx.lineWidth=1.5;
-  ctx.strokeRect(bx+5,by+5,bw-10,bh-10);
-  ctx.globalAlpha=.06;
-  ctx.strokeRect(bx+12,by+12,bw-24,bh-24);
-
-  // 装订线（右侧，竖排古籍右翻）
-  ctx.globalAlpha=.1;
-  ctx.strokeStyle='#7a6a50';ctx.lineWidth=1.5;
-  const bindX=bx+bw-10;
-  for(let i=0;i<5;i++){
-    const yy=by+bh*.15+i*bh*.175;
-    ctx.beginPath();ctx.moveTo(bindX,yy-6);ctx.lineTo(bindX,yy+6);ctx.stroke();
-  }
-  ctx.globalAlpha=1;
-}
-
-function drawChars(t){
-  ctx.font=charSz+'px '+F;
+let endStart=0;
+function drawEnding(t){
+  // 当画面几乎完全溶解
+  if(dissolveFactor<.9)return;
+  if(!endStart)endStart=t;
+  const et=t-endStart;
+  const a=Math.min(.5,et*.04);
+  if(a<.01)return;
+  ctx.save();ctx.globalAlpha=a;
   ctx.textAlign='center';ctx.textBaseline='middle';
-  for(let i=0;i<chars.length;i++){
-    const c=chars[i];
-    if(c.ink<.01)continue;
+  const sz=Math.floor(Math.min(W,H)*.04);
+  ctx.font=sz+'px '+FT;
+  ctx.fillStyle='rgba(90,74,58,.8)';
+  ctx.fillText('字已隨水去',W/2,H/2-sz*.7);
+  ctx.fillText('紙上空留痕',W/2,H/2+sz*.7);
+  ctx.restore();
+}
 
-    // 溶解中 → 产生墨水粒子
-    if(c.dissolveRate>0&&c.ink>.05&&Math.random()<c.dissolveRate*8){
-      spawnInk(c.x,c.y);
-    }
-    // 墨水浓度下降
-    if(c.dissolveRate>0) c.ink=Math.max(0,c.ink-c.dissolveRate);
-
-    // 绘制文字
-    ctx.globalAlpha=c.ink;
-    // 墨色随湿润度变化：干=深墨，湿=浅灰偏蓝
-    const wetP=c.wet;
-    const r2=Math.floor(35+wetP*60+(1-c.ink)*40);
-    const g2=Math.floor(28+wetP*55+(1-c.ink)*40);
-    const b2=Math.floor(22+wetP*65+(1-c.ink)*50);
-    ctx.fillStyle='rgb('+r2+','+g2+','+b2+')';
-
-    // 溶解时文字微微散开
-    const spread=(1-c.ink)*.5;
-    if(spread>.05){
-      // 用 shadow 模拟墨水晕染
-      ctx.shadowColor='rgba('+r2+','+g2+','+b2+','+c.ink*.3+')';
-      ctx.shadowBlur=spread*charSz*.8;
-    }
-    ctx.fillText(c.ch,c.x,c.y);
-    ctx.shadowBlur=0;
+// ═══════════════════════════════════════
+//  音效
+// ═══════════════════════════════════════
+function initAudio(){
+  const ac=new(AudioContext||webkitAudioContext)();
+  const m=ac.createGain();m.gain.value=.07;m.connect(ac.destination);
+  // 雨声
+  const sz2=ac.sampleRate*2,buf=ac.createBuffer(1,sz2,ac.sampleRate),d=buf.getChannelData(0);
+  for(let i=0;i<sz2;i++)d[i]=(Math.random()*2-1)*.2;
+  const src=ac.createBufferSource();src.buffer=buf;src.loop=true;
+  const lp=ac.createBiquadFilter();lp.type='lowpass';lp.frequency.value=500;
+  const rg=ac.createGain();rg.gain.value=.25;
+  src.connect(lp);lp.connect(rg);rg.connect(m);src.start();
+  // 水滴
+  function drip(){
+    if(!started)return;
+    const o=ac.createOscillator(),g2=ac.createGain();
+    o.type='sine';
+    const f=500+Math.random()*500;
+    o.frequency.setValueAtTime(f,ac.currentTime);
+    o.frequency.exponentialRampToValueAtTime(f*.25,ac.currentTime+.1);
+    g2.gain.setValueAtTime(.012+Math.random()*.008,ac.currentTime);
+    g2.gain.exponentialRampToValueAtTime(.001,ac.currentTime+.15);
+    o.connect(g2);g2.connect(m);o.start();o.stop(ac.currentTime+.18);
+    setTimeout(drip,600+Math.random()*2000);
   }
-  ctx.globalAlpha=1;
+  setTimeout(drip,300);
 }
 
 // ═══════════════════════════════════════
@@ -294,88 +534,32 @@ let started=false,startTime=0;
 
 function tick(){
   requestAnimationFrame(tick);
-  if(!started){ctx.fillStyle='#e8e0d0';ctx.fillRect(0,0,W,H);return;}
+  if(!started){ctx.fillStyle='#d8d0c0';ctx.fillRect(0,0,W,H);return;}
   const t=(performance.now()-startTime)/1000;
 
-  // 天色（灰蓝雨天）
+  // 灰蓝天色
   const bg=ctx.createLinearGradient(0,0,0,H);
-  bg.addColorStop(0,'#ddd8cc');bg.addColorStop(.4,'#e2dcd0');bg.addColorStop(1,'#e8e2d6');
+  bg.addColorStop(0,'#c8c4b8');bg.addColorStop(.5,'#d2cec2');bg.addColorStop(1,'#d8d4c8');
   ctx.fillStyle=bg;ctx.fillRect(0,0,W,H);
 
-  // 雨
-  updateRain(t);
-  drawRain();
-
-  // 书页
-  drawBook();
-
-  // 墨水流淌
-  updateDrawInk();
-
-  // 涟漪
-  drawRipples();
-
-  // 文字
-  drawChars(t);
-
-  // 结语：所有文字消失后
-  const aliveCount=chars.filter(c=>c.ink>.01).length;
-  if(aliveCount===0){
-    // 从全部消失那一刻开始计时
-    if(!this._endT) this._endT=t;
-    const et=t-this._endT;
-    const ea=Math.min(.55,et*.06);
-    if(ea>.01){
-      ctx.save();ctx.globalAlpha=ea;
-      ctx.textAlign='center';ctx.textBaseline='middle';
-      ctx.font=Math.floor(charSz*1.1)+'px '+F;
-      ctx.fillStyle='rgba(90,74,58,.85)';
-      ctx.fillText('字已隨水去',W/2,H/2-charSz*.7);
-      ctx.fillText('紙上空留痕',W/2,H/2+charSz*.7);
-      ctx.restore();
-    }
-  }
+  updateRain();
+  drawRain2();
+  drawScene(t);
+  drawEnding(t);
 }
 
-// ═══════════════════════════════════════
-//  音效
-// ═══════════════════════════════════════
-function initAudio(){
-  const ac=new(AudioContext||webkitAudioContext)();
-  const m=ac.createGain();m.gain.value=.08;m.connect(ac.destination);
-  // 雨声
-  const sz=ac.sampleRate*2,buf=ac.createBuffer(1,sz,ac.sampleRate),d=buf.getChannelData(0);
-  for(let i=0;i<sz;i++)d[i]=(Math.random()*2-1)*.25;
-  const s=ac.createBufferSource();s.buffer=buf;s.loop=true;
-  const lp=ac.createBiquadFilter();lp.type='lowpass';lp.frequency.value=600;
-  const rg=ac.createGain();rg.gain.value=.2;
-  s.connect(lp);lp.connect(rg);rg.connect(m);s.start();
-  // 随机水滴声
-  function drip(){
-    if(!started)return;
-    const o=ac.createOscillator(),g=ac.createGain();
-    o.type='sine';
-    const freq=600+Math.random()*600;
-    o.frequency.setValueAtTime(freq,ac.currentTime);
-    o.frequency.exponentialRampToValueAtTime(freq*.3,ac.currentTime+.12);
-    g.gain.setValueAtTime(.015+Math.random()*.01,ac.currentTime);
-    g.gain.exponentialRampToValueAtTime(.001,ac.currentTime+.15);
-    o.connect(g);g.connect(m);o.start();o.stop(ac.currentTime+.2);
-    setTimeout(drip,800+Math.random()*2500);
-  }
-  setTimeout(drip,500);
-}
-
-// ═══════════════════════════════════════
-//  启动
-// ═══════════════════════════════════════
+// 启动
 document.getElementById('p').addEventListener('click',()=>{
   const b=document.getElementById('p');
   b.style.opacity='0';setTimeout(()=>b.style.display='none',1500);
   started=true;startTime=performance.now();
+  buildPainting();
   initAudio();
 },{once:true});
-window.addEventListener('resize',()=>{W=innerWidth;H=innerHeight;C.width=W;C.height=H;layout();});
+window.addEventListener('resize',()=>{
+  W=innerWidth;H=innerHeight;C.width=W;C.height=H;
+  if(started)buildPainting();
+});
 C.addEventListener('touchstart',e=>e.preventDefault(),{passive:false});
 C.addEventListener('touchmove',e=>e.preventDefault(),{passive:false});
 tick();
