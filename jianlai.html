@@ -368,8 +368,8 @@ function getSwordState(t){
   
   sAs.x=cx+sepX;sAs.y=cy+sepY;sAs.sc=sc;
   sBs.x=cx-sepX;sBs.y=cy-sepY;sBs.sc=sc;
-  sAs.angle=Math.atan2(sBs.y-sAs.y,sBs.x-sAs.x)-Math.PI/2;
-  sBs.angle=Math.atan2(sAs.y-sBs.y,sAs.x-sBs.x)-Math.PI/2;
+  sAs.angle=Math.atan2(sBs.y-sAs.y,sBs.x-sAs.x)+Math.PI/2;
+  sBs.angle=Math.atan2(sAs.y-sBs.y,sAs.x-sBs.x)+Math.PI/2;
   
   if(clashFlash>0)clashFlash*=.86;
 }
