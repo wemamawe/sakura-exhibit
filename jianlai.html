@@ -358,30 +358,61 @@ function drawBg(){
 //  坐标 0-1 归一化，sc 是大小缩放
 //  所有关键帧时间连续，不留空白
 // ═══════════════════════════════════════
+// 所有坐标严格限制在 .3~.7 范围，确保巨剑始终在屏幕内
+// 非碰撞帧只是短暂弹开（小距离），不飞到边缘
 const KF=[
-  // 凝形完毕，双剑初现（静止定型）
-  {t:8,   ax:.3,ay:.45,aa:-.78, bx:.7,by:.45,ba:Math.PI+.78},
-  // 厮杀开始：双剑交锋
-  {t:9.5, ax:.42,ay:.4,aa:.5,   bx:.58,by:.4,ba:Math.PI-.5, clash:true},
-  {t:10.3,ax:.2,ay:.3,aa:-.8,   bx:.8,by:.55,ba:Math.PI+.8},
-  {t:11.2,ax:.55,ay:.5,aa:1.0,  bx:.45,by:.3,ba:Math.PI-1.0, clash:true},
-  {t:12,  ax:.75,ay:.25,aa:-.3, bx:.25,by:.6,ba:Math.PI+.3},
-  {t:13,  ax:.45,ay:.35,aa:.6,  bx:.55,by:.35,ba:Math.PI-.6, clash:true},
-  {t:13.8,ax:.15,ay:.55,aa:1.5, bx:.85,by:.35,ba:Math.PI-1.5},
-  {t:14.8,ax:.6,ay:.5,aa:-.7,   bx:.4,by:.35,ba:Math.PI+.7, clash:true},
-  {t:15.5,ax:.3,ay:.25,aa:1.2,  bx:.7,by:.6,ba:Math.PI-1.2},
-  {t:16.5,ax:.48,ay:.42,aa:.4,  bx:.52,by:.42,ba:Math.PI-.4, clash:true},
-  // 落字阶段：更密集
-  {t:17.2,ax:.65,ay:.3,aa:-1.0, bx:.35,by:.55,ba:Math.PI+1.0},
-  {t:17.8,ax:.5,ay:.38,aa:.2,   bx:.5,by:.38,ba:Math.PI-.2, clash:true},
-  {t:18.3,ax:.35,ay:.5,aa:1.3,  bx:.65,by:.3,ba:Math.PI-1.3},
-  {t:18.8,ax:.48,ay:.4,aa:.7,   bx:.52,by:.4,ba:Math.PI-.7, clash:true},
-  {t:19.3,ax:.55,ay:.45,aa:-.5, bx:.45,by:.35,ba:Math.PI+.5, clash:true},
-  {t:19.8,ax:.5,ay:.4,aa:.3,    bx:.5,by:.4,ba:Math.PI-.3, clash:true},
-  // 最终定格
-  {t:20.5,ax:.49,ay:.42,aa:.78, bx:.51,by:.42,ba:Math.PI-.78, clash:true},
+  // 凝形完毕，双剑初现
+  {t:8,   ax:.38,ay:.45,aa:-.78, bx:.62,by:.45,ba:Math.PI+.78},
+  // ── 厮杀 ──
+  // 第1击：正面冲
+  {t:9.3, ax:.45,ay:.42,aa:.5,   bx:.55,by:.42,ba:Math.PI-.5, clash:true},
+  // 弹开（短距离）
+  {t:9.8, ax:.38,ay:.38,aa:-.3,  bx:.62,by:.48,ba:Math.PI+.3},
+  // 第2击：斜劈
+  {t:10.5,ax:.47,ay:.4,aa:1.0,   bx:.53,by:.45,ba:Math.PI-1.0, clash:true},
+  // 弹开
+  {t:11,  ax:.4,ay:.5,aa:-.6,    bx:.6,by:.35,ba:Math.PI+.6},
+  // 第3击：交叉
+  {t:11.8,ax:.48,ay:.38,aa:.7,   bx:.52,by:.38,ba:Math.PI-.7, clash:true},
+  // 弹开旋转
+  {t:12.3,ax:.42,ay:.35,aa:1.5,  bx:.58,by:.5,ba:Math.PI-1.5},
+  // 第4击：从上劈下
+  {t:13,  ax:.46,ay:.4,aa:-.5,    bx:.54,by:.4,ba:Math.PI+.5, clash:true},
+  // 弹开
+  {t:13.5,ax:.38,ay:.45,aa:.8,   bx:.62,by:.4,ba:Math.PI-.8},
+  // 第5击：侧击
+  {t:14.2,ax:.47,ay:.42,aa:.4,   bx:.53,by:.42,ba:Math.PI-.4, clash:true},
+  // 弹开
+  {t:14.7,ax:.42,ay:.5,aa:-1.0,  bx:.58,by:.35,ba:Math.PI+1.0},
+  // 第6击：重击
+  {t:15.5,ax:.48,ay:.4,aa:.6,    bx:.52,by:.4,ba:Math.PI-.6, clash:true},
+  // 微弹
+  {t:15.9,ax:.44,ay:.38,aa:-.4,  bx:.56,by:.45,ba:Math.PI+.4},
+  // 第7击
+  {t:16.5,ax:.47,ay:.42,aa:.9,   bx:.53,by:.42,ba:Math.PI-.9, clash:true},
+  // ── 落字：更密集 ──
+  // 微弹
+  {t:16.8,ax:.43,ay:.45,aa:-1.2, bx:.57,by:.38,ba:Math.PI+1.2},
+  // 第8击
+  {t:17.3,ax:.49,ay:.4,aa:.3,    bx:.51,by:.4,ba:Math.PI-.3, clash:true},
+  // 极短弹开
+  {t:17.6,ax:.45,ay:.42,aa:.8,   bx:.55,by:.4,ba:Math.PI-.8},
+  // 第9击
+  {t:18,  ax:.48,ay:.41,aa:-.5,  bx:.52,by:.41,ba:Math.PI+.5, clash:true},
+  // 极短弹开
+  {t:18.3,ax:.44,ay:.38,aa:1.1,  bx:.56,by:.45,ba:Math.PI-1.1},
+  // 第10击
+  {t:18.7,ax:.49,ay:.4,aa:.6,    bx:.51,by:.4,ba:Math.PI-.6, clash:true},
+  // 极短
+  {t:19,  ax:.46,ay:.43,aa:-.7,  bx:.54,by:.4,ba:Math.PI+.7},
+  // 第11击
+  {t:19.4,ax:.48,ay:.41,aa:.4,   bx:.52,by:.41,ba:Math.PI-.4, clash:true},
+  // 第12击：最后一击——交叉定格
+  {t:20,  ax:.49,ay:.42,aa:.78,   bx:.51,by:.42,ba:Math.PI-.78, clash:true},
+  // 定格
+  {t:20.5,ax:.49,ay:.42,aa:.78,  bx:.51,by:.42,ba:Math.PI-.78},
   // 归无
-  {t:22,  ax:.49,ay:.42,aa:.78, bx:.51,by:.42,ba:Math.PI-.78},
+  {t:22,  ax:.49,ay:.42,aa:.78,  bx:.51,by:.42,ba:Math.PI-.78},
 ];
 
 function lerpKF(t){
@@ -404,8 +435,8 @@ function lerpKF(t){
 let gatherDone=false;
 function assignGatherTargets(){
   const sl=baseSwordLen();
-  const ptsA=swordPoints(W*.3,H*.45,-.78,sl,N/2);
-  const ptsB=swordPoints(W*.7,H*.45,Math.PI+.78,sl,N/2);
+  const ptsA=swordPoints(W*.38,H*.45,-.78,sl,N/2);
+  const ptsB=swordPoints(W*.62,H*.45,Math.PI+.78,sl,N/2);
   let ai=0,bi=0;
   for(let i=0;i<N;i++){
     if(psd[i]===0){
@@ -480,8 +511,8 @@ function tick(){
     if(t>7){
       const sa=(t-7)/2; // 0→1
       const sl=baseSwordLen();
-      drawTextSword(W*.3,H*.45,-.78,sl,42,sa*.4,t,zoom);
-      drawTextSword(W*.7,H*.45,Math.PI+.78,sl,210,sa*.4,t,zoom);
+      drawTextSword(W*.38,H*.45,-.78,sl,42,sa*.4,t,zoom);
+      drawTextSword(W*.62,H*.45,Math.PI+.78,sl,210,sa*.4,t,zoom);
     }
 
     ctx.restore();
@@ -536,13 +567,12 @@ function tick(){
   }
 
   // ─── 归无：最终爆发 ───
-  if(t>20.5&&!finalBurst){
+  if(t>20&&!finalBurst){
     finalBurst=true;
     spawnFall(W*.5,H*.42,250,1.6);
     addSpark(W*.5,H*.42,50);
   }
-  // 落字阶段持续掉字
-  if(t>17&&t<21&&frame%3===0){
+  if(t>17&&t<20.5&&frame%3===0){
     spawnFall(W*.5+(Math.random()-.5)*W*.3,H*.4+(Math.random()-.5)*H*.15,4,.5);
   }
 
@@ -620,7 +650,7 @@ function initAudio(){
     r.connect(rg);rg.connect(m);r.start();r.stop(ac.currentTime+4.5);
   },5000);
   // 碰撞音效
-  const clashTs=[9.5,11.2,13,14.8,16.5,17.8,18.8,19.3,19.8,20.5];
+  const clashTs=[9.3,10.5,11.8,13,14.2,15.5,16.5,17.3,18,18.7,19.4,20];
   clashTs.forEach(ct=>{
     setTimeout(()=>{
       const sz=ac.sampleRate*(ct>17?.12:.07);
@@ -648,7 +678,7 @@ function initAudio(){
     ig.gain.setValueAtTime(.35,ac.currentTime);
     ig.gain.exponentialRampToValueAtTime(.001,ac.currentTime+1);
     imp.connect(ig);ig.connect(m);imp.start();imp.stop(ac.currentTime+1.2);
-  },20500);
+  },20000);
   // 余韵
   setTimeout(()=>{
     [196,294,392,523].forEach((f,i)=>{
@@ -659,7 +689,7 @@ function initAudio(){
       g.gain.exponentialRampToValueAtTime(.001,ac.currentTime+5);
       o.connect(g);g.connect(m);o.start(ac.currentTime+i*.5);o.stop(ac.currentTime+6);
     });
-  },21500);
+  },21000);
 }
 </script>
 </body>
