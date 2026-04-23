@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>烛火信笺 · 木兰花令 · 配音版</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    background: #0c0805;
+    display: flex; align-items: center; justify-content: center;
+    min-height: 100vh; overflow: hidden;
+    touch-action: none;
+  }
+  canvas { display: block; width: 100%; height: 100%; }
+  #playBtn {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    z-index: 1000; background: rgba(0,0,0,0.75);
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; transition: opacity 1s;
+  }
+  #playBtn .inner { text-align: center; color: #f0ece2; }
+  #playBtn .title { font: 28px "Songti SC","SimSun",serif; letter-spacing: 6px; margin-bottom: 12px; }
+  #playBtn .sub { font: 13px "Songti SC","SimSun",serif; opacity: 0.5; margin-bottom: 24px; }
+  #playBtn .circle {
+    width: 66px; height: 66px; border-radius: 50%;
+    border: 2px solid rgba(255,200,100,0.4);
+    display: flex; align-items: center; justify-content: center;
+    margin: 0 auto; transition: all 0.3s;
+  }
+  #playBtn .circle:hover { background: rgba(255,200,100,0.1); border-color: rgba(255,200,100,0.6); }
+  #playBtn .triangle {
+    width: 0; height: 0;
+    border-top: 13px solid transparent; border-bottom: 13px solid transparent;
+    border-left: 20px solid rgba(255,200,100,0.7);
+    margin-left: 4px;
+  }
+</style>
+</head>
+<body>
+
+<div id="playBtn">
+  <div class="inner">
+    <div class="title">烛火信笺</div>
+    <div class="sub">木兰花令 · 纳兰性德</div>
+    <div class="circle"><div class="triangle"></div></div>
+  </div>
+</div>
+
+<canvas id="c"></canvas>
+<script>
+const canvas = document.getElementById('c');
+const ctx    = canvas.getContext('2d');
+let W = window.innerWidth, H = window.innerHeight;
+canvas.width = W; canvas.height = H;
+
+// ══════════════════════════════════════
+//  音频
+// ══════════════════════════════════════
+let audioCtx, voiceBuffer, voiceSource, voiceStartTime = 0;
+let audioPlaying = false;
+// 篝火音效节点
+let fireSource, fireGain, crackleActive = false;
+
+async function loadAudio() {
+  audioCtx = new (AudioContext || webkitAudioContext)();
+  const resp = await fetch('candle-voice.mp3');
+  const buf  = await resp.arrayBuffer();
+  voiceBuffer = await audioCtx.decodeAudioData(buf);
+}
+
+function startFireSound() {
+  // 温暖低频底噪
+  const bufSz = audioCtx.sampleRate * 2;
+  const buf = audioCtx.createBuffer(1, bufSz, audioCtx.sampleRate);
+  const d = buf.getChannelData(0);
+  for(let i=0;i<bufSz;i++) d[i]=Math.random()*2-1;
+  fireSource = audioCtx.createBufferSource();
+  fireSource.buffer = buf; fireSource.loop = true;
+  const lp = audioCtx.createBiquadFilter();
+  lp.type='lowpass'; lp.frequency.value=250;
+  fireGain = audioCtx.createGain(); fireGain.gain.value=0.06;
+  fireSource.connect(lp); lp.connect(fireGain); fireGain.connect(audioCtx.destination);
+  fireSource.start();
+
+  // 噼啪
+  crackleActive = true;
+  function crackle(){
+    if(!crackleActive) return;
+    const bSz=audioCtx.sampleRate*0.03;
+    const b=audioCtx.createBuffer(1,bSz,audioCtx.sampleRate);
+    const bd=b.getChannelData(0);
+    for(let i=0;i<bSz;i++) bd[i]=(Math.random()*2-1)*Math.exp(-i/bSz*12);
+    const src=audioCtx.createBufferSource(); src.buffer=b;
+    const g=audioCtx.createGain(); g.gain.value=0.12;
+    src.connect(g); g.connect(audioCtx.destination); src.start();
+    setTimeout(crackle, 200+Math.random()*500);
+  }
+  crackle();
+}
+
+function playAudio() {
+  if (!voiceBuffer) return;
+  voiceSource = audioCtx.createBufferSource();
+  voiceSource.buffer = voiceBuffer;
+  const voiceGain = audioCtx.createGain();
+  voiceGain.gain.value = 1.0;
+  voiceSource.connect(voiceGain);
+  voiceGain.connect(audioCtx.destination);
+  voiceSource.start(0);
+  voiceStartTime = audioCtx.currentTime;
+  audioPlaying = true;
+  voiceSource.onended = () => { audioPlaying = false; };
+}
+
+// ══════════════════════════════════════
+//  诗词内容
+// ══════════════════════════════════════
+const POEM_LINES = [
+  '人生若只如初见，',
+  '何事秋风悲画扇。',
+  '等闲变却故人心，',
+  '却道故人心易变。',
+  '骊山语罢清宵半，',
+  '泪雨零铃终不怨。',
+  '何如薄幸锦衣郎，',
+  '比翼连枝当日愿。',
+];
+
+// 配音时间轴：每句对应的时间区间（秒）
+const LINE_TIMING = [
+  { start: 0.0,  end: 2.0 },  // 人生若只如初见
+  { start: 2.0,  end: 3.6 },  // 何事秋风悲画扇
+  { start: 3.8,  end: 5.4 },  // 等闲变却故人心
+  { start: 5.4,  end: 7.0 },  // 却道故人心易变
+  { start: 7.2,  end: 8.8 },  // 骊山语罢清宵半
+  { start: 8.8,  end: 10.2 }, // 泪雨零铃终不怨
+  { start: 10.4, end: 11.8 }, // 何如薄幸锦衣郎
+  { start: 11.8, end: 13.2 }, // 比翼连枝当日愿
+];
+
+const VOICE_TOTAL = 13.5; // 配音总时长
+
+// ══════════════════════════════════════
+//  响应式布局
+// ══════════════════════════════════════
+let PX, PY, PW, PH, ML, MT, LINE_H, FONT;
+function updateLayout() {
+  const scale = Math.min(W, H) / 700;
+  PX = W * 0.28; PY = H * 0.15;
+  PW = Math.min(W * 0.43, 224); PH = Math.min(H * 0.49, 340);
+  ML = 28 * scale; MT = 26 * scale; LINE_H = 30 * scale;
+  FONT = `${Math.floor(14 * scale)}px "Songti SC","SimSun","STSong",serif`;
+}
+updateLayout();
+
+let charMap = [];
+function buildCharMap() {
+  charMap = [];
+  ctx.font = FONT;
+  let globalIdx = 0;
+  POEM_LINES.forEach((line, row) => {
+    let cx = PX + ML;
+    const baseY = PY + MT + (row + 0.82) * LINE_H;
+    for (let col = 0; col < line.length; col++) {
+      const ch = line[col];
+      const cw = ctx.measureText(ch).width;
+      charMap.push({ ch, x: cx, y: baseY, row, col, cw, lineIdx: row, globalIdx });
+      cx += cw;
+      globalIdx++;
+    }
+  });
+}
+buildCharMap();
+const TOTAL = charMap.length;
+
+// ══════════════════════════════════════
+//  蜡烛
+// ══════════════════════════════════════
+let CX, CY, CANDLE_W, CANDLE_H;
+function updateCandle() {
+  CX = W / 2;
+  CY = H - H * 0.114;
+  const scale = Math.min(W, H) / 700;
+  CANDLE_W = 22 * scale;
+  CANDLE_H = 90 * scale;
+}
+updateCandle();
+
+const tears = [];
+for (let i = 0; i < 4; i++) {
+  tears.push({
+    x: CX + (Math.random() - 0.5) * CANDLE_W * 0.6,
+    y: CY + Math.random() * 20,
+    vy: 0.15 + Math.random() * 0.1,
+    r:  2 + Math.random() * 1.5,
+    maxY: CY + 40 + Math.random() * 20,
+    alpha: 0.7 + Math.random() * 0.25,
+  });
+}
+
+// ══════════════════════════════════════
+//  基于时间的动画
+// ══════════════════════════════════════
+let startTime = 0;
+let started   = false;
+let frame     = 0;
+
+const clamp01 = t => Math.max(0, Math.min(1, t));
+const easeOut = t => 1 - Math.pow(1-t, 2);
+
+// 根据时间计算已显示字符数
+function getShownChars(t) {
+  if (t < 0) return 0;
+  let shown = 0;
+  // 逐行按时间轴推进
+  for (let li = 0; li < POEM_LINES.length; li++) {
+    const timing = LINE_TIMING[li];
+    if (t < timing.start) break;
+    const lineChars = POEM_LINES[li].length;
+    if (t >= timing.end) {
+      shown += lineChars;
+    } else {
+      const prog = (t - timing.start) / (timing.end - timing.start);
+      shown += Math.floor(prog * lineChars);
+      break;
+    }
+  }
+  return Math.min(shown, TOTAL);
+}
+
+// ══════════════════════════════════════
+//  绘制函数
+// ══════════════════════════════════════
+function drawCandle(flickerX, flickerY) {
+  const cg = ctx.createLinearGradient(CX - CANDLE_W/2, 0, CX + CANDLE_W/2, 0);
+  cg.addColorStop(0,   '#c8c0b0');
+  cg.addColorStop(0.35,'#f0ece0');
+  cg.addColorStop(0.65,'#e8e4d8');
+  cg.addColorStop(1,   '#a09080');
+  ctx.fillStyle = cg;
+  ctx.fillRect(CX - CANDLE_W/2, CY, CANDLE_W, CANDLE_H);
+  ctx.beginPath();
+  ctx.ellipse(CX, CY, CANDLE_W/2, 5, 0, 0, Math.PI*2);
+  ctx.fillStyle = '#d8d0b8'; ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(CX, CY);
+  ctx.lineTo(CX + flickerX * 0.3, CY - 10);
+  ctx.strokeStyle = '#2a1a0a'; ctx.lineWidth = 1.5; ctx.stroke();
+  for (const t of tears) {
+    ctx.beginPath();
+    ctx.arc(t.x, t.y, t.r, 0, Math.PI*2);
+    ctx.fillStyle = `rgba(220,215,195,${t.alpha})`; ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(t.x, t.y - t.r);
+    ctx.lineTo(t.x, Math.min(t.y + 8, t.maxY));
+    ctx.strokeStyle = `rgba(215,208,188,${t.alpha * 0.5})`;
+    ctx.lineWidth = t.r * 1.2; ctx.lineCap = 'round'; ctx.stroke();
+  }
+}
+
+function drawFlame(flickerX, flickerY) {
+  const fx = CX + flickerX, fy = CY + flickerY;
+  const glow = ctx.createRadialGradient(fx, fy, 8, fx, fy, 220);
+  glow.addColorStop(0,   'rgba(255,175,60,0.22)');
+  glow.addColorStop(0.25,'rgba(255,140,40,0.10)');
+  glow.addColorStop(0.6, 'rgba(200,80,20,0.04)');
+  glow.addColorStop(1,   'rgba(150,50,10,0)');
+  ctx.fillStyle = glow; ctx.fillRect(0, 0, W, H);
+
+  const mg = ctx.createRadialGradient(fx, fy, 3, fx, fy, 55);
+  mg.addColorStop(0,   'rgba(255,220,120,0.55)');
+  mg.addColorStop(0.5, 'rgba(255,160,50,0.20)');
+  mg.addColorStop(1,   'rgba(200,80,20,0)');
+  ctx.fillStyle = mg;
+  ctx.beginPath(); ctx.arc(fx, fy, 55, 0, Math.PI*2); ctx.fill();
+
+  ctx.save(); ctx.translate(fx, fy);
+  ctx.beginPath(); ctx.moveTo(0, 0);
+  ctx.bezierCurveTo(-10, -18, -14, -34, 0, -48);
+  ctx.bezierCurveTo(14, -34, 10, -18, 0, 0);
+  ctx.fillStyle = 'rgba(220,90,20,0.75)'; ctx.fill();
+  ctx.beginPath(); ctx.moveTo(0, 2);
+  ctx.bezierCurveTo(-7, -14, -10, -28, 0, -40);
+  ctx.bezierCurveTo(10, -28, 7, -14, 0, 2);
+  ctx.fillStyle = 'rgba(255,170,40,0.88)'; ctx.fill();
+  ctx.beginPath(); ctx.moveTo(0, 2);
+  ctx.bezierCurveTo(-4, -10, -5, -22, 0, -30);
+  ctx.bezierCurveTo(5, -22, 4, -10, 0, 2);
+  ctx.fillStyle = 'rgba(255,248,180,0.96)'; ctx.fill();
+  ctx.beginPath(); ctx.arc(0, -14, 4, 0, Math.PI*2);
+  ctx.fillStyle = 'rgba(255,255,230,0.9)'; ctx.fill();
+  ctx.restore();
+}
+
+function drawPaper(flickerX, flickerY) {
+  const fx = CX + flickerX, fy = CY + flickerY;
+  ctx.save();
+  ctx.shadowColor = 'rgba(0,0,0,0.6)'; ctx.shadowBlur = 24;
+  ctx.shadowOffsetX = 3; ctx.shadowOffsetY = 4;
+  ctx.fillStyle = '#f2ede0'; ctx.fillRect(PX, PY, PW, PH);
+  ctx.shadowColor = 'transparent';
+  const paperGlow = ctx.createRadialGradient(fx, fy, 0, fx, fy, 280);
+  paperGlow.addColorStop(0,   'rgba(255,180,60,0.18)');
+  paperGlow.addColorStop(0.4, 'rgba(255,140,40,0.08)');
+  paperGlow.addColorStop(1,   'rgba(0,0,0,0)');
+  ctx.fillStyle = paperGlow; ctx.fillRect(PX, PY, PW, PH);
+  const vignette = ctx.createRadialGradient(PX+PW/2, PY+PH/2, PH*0.2, PX+PW/2, PY+PH/2, PH*0.85);
+  vignette.addColorStop(0, 'rgba(0,0,0,0)');
+  vignette.addColorStop(1, 'rgba(0,0,0,0.35)');
+  ctx.fillStyle = vignette; ctx.fillRect(PX, PY, PW, PH);
+  const nLines = Math.floor((PH - MT - 14) / LINE_H);
+  for (let i = 0; i <= nLines; i++) {
+    const ly = PY + MT + i * LINE_H;
+    if (ly > PY + PH - 10) break;
+    ctx.beginPath(); ctx.moveTo(PX+6, ly); ctx.lineTo(PX+PW-6, ly);
+    ctx.strokeStyle = 'rgba(100,140,200,0.22)'; ctx.lineWidth = 0.7; ctx.stroke();
+  }
+  ctx.beginPath();
+  ctx.moveTo(PX+ML-8, PY+10); ctx.lineTo(PX+ML-8, PY+PH-10);
+  ctx.strokeStyle = 'rgba(185,50,50,0.45)'; ctx.lineWidth = 1; ctx.stroke();
+  ctx.strokeStyle = 'rgba(0,0,0,0.08)'; ctx.lineWidth = 1;
+  ctx.strokeRect(PX, PY, PW, PH);
+  ctx.restore();
+}
+
+function drawText(shown, flickerX, flickerY, flickerIntensity) {
+  ctx.font = FONT; ctx.textBaseline = 'alphabetic'; ctx.textAlign = 'left';
+  const fx = CX + flickerX, fy = CY + flickerY;
+  for (let i = 0; i < Math.min(shown, TOTAL); i++) {
+    const cm = charMap[i];
+    const jitter = flickerIntensity * 0.8;
+    const jx = Math.sin(frame * 0.23 + i * 1.7) * jitter;
+    const jy = Math.cos(frame * 0.19 + i * 2.1) * jitter;
+    const dist = Math.hypot(cm.x - fx, cm.y - fy);
+    const lit  = Math.max(0.25, Math.min(1, 1 - dist / 280));
+    const bright = Math.floor(100 + lit * 130);
+    const warm   = Math.floor(lit * 30);
+    ctx.save();
+    ctx.globalAlpha = 0.7 + lit * 0.3;
+    ctx.fillStyle = `rgb(${bright+warm},${bright},${Math.max(0,bright-warm*2)})`;
+    ctx.fillText(cm.ch, cm.x + jx, cm.y + jy);
+    ctx.restore();
+  }
+  // 标注
+  if (shown >= TOTAL) {
+    const labelA = clamp01((shown - TOTAL + 1));
+    ctx.save();
+    ctx.globalAlpha = 0.55 * labelA;
+    ctx.font = '11px "Songti SC","SimSun",serif';
+    ctx.fillStyle = 'rgba(160,140,100,1)';
+    ctx.textAlign = 'center';
+    ctx.fillText('木兰花令 · 拟古决绝词', PX + PW/2, PY + PH + 18);
+    ctx.fillText('清 · 纳兰性德', PX + PW/2, PY + PH + 32);
+    ctx.restore();
+  }
+}
+
+// ══════════════════════════════════════
+//  主循环
+// ══════════════════════════════════════
+function tick() {
+  requestAnimationFrame(tick);
+  frame++;
+
+  const noise1 = Math.sin(frame * 0.13) * 2.2 + Math.sin(frame * 0.07) * 1.4;
+  const noise2 = Math.cos(frame * 0.17) * 1.0 + Math.sin(frame * 0.11) * 0.8;
+  const flickerX = noise1 + noise2;
+  const flickerY = Math.sin(frame * 0.09) * 1.2 - 2;
+  const flickerIntensity = 0.6 + Math.abs(Math.sin(frame * 0.08)) * 0.8;
+
+  ctx.fillStyle = '#0c0805'; ctx.fillRect(0, 0, W, H);
+
+  // 渐入场景（即使未点击也有烛光氛围）
+  const sceneAlpha = started ? 1 : clamp01(frame / 120) * 0.3;
+
+  ctx.save(); ctx.globalAlpha = sceneAlpha;
+  drawFlame(flickerX, flickerY);
+  drawPaper(flickerX, flickerY);
+  ctx.restore();
+
+  if (started) {
+    const t = (performance.now() - startTime) / 1000;
+    // 场景淡入
+    const fadeIn = easeOut(clamp01(t / 1.0));
+
+    ctx.save(); ctx.globalAlpha = fadeIn;
+    drawFlame(flickerX, flickerY);
+    drawPaper(flickerX, flickerY);
+    ctx.restore();
+
+    // 配音延迟 1 秒后开始打字
+    const voiceDelay = 1.0;
+    const textTime = t - voiceDelay;
+    const shown = getShownChars(textTime);
+
+    drawText(shown, flickerX, flickerY, flickerIntensity);
+  }
+
+  drawCandle(flickerX, flickerY);
+  drawFlame(flickerX, flickerY);
+
+  for (const t of tears) {
+    t.y += t.vy;
+    if (t.y >= t.maxY) {
+      t.y = CY + 5 + Math.random() * 10;
+      t.x = CX + (Math.random() - 0.5) * CANDLE_W * 0.5;
+    }
+  }
+}
+
+// ══════════════════════════════════════
+//  窗口 resize
+// ══════════════════════════════════════
+window.addEventListener('resize', () => {
+  W = window.innerWidth; H = window.innerHeight;
+  canvas.width = W; canvas.height = H;
+  updateLayout(); buildCharMap(); updateCandle();
+  tears.length = 0;
+  for (let i = 0; i < 4; i++) {
+    tears.push({
+      x: CX + (Math.random() - 0.5) * CANDLE_W * 0.6,
+      y: CY + Math.random() * 20,
+      vy: 0.15 + Math.random() * 0.1,
+      r:  2 + Math.random() * 1.5,
+      maxY: CY + 40 + Math.random() * 20,
+      alpha: 0.7 + Math.random() * 0.25,
+    });
+  }
+});
+
+canvas.addEventListener('touchstart', (e) => { e.preventDefault(); }, { passive: false });
+canvas.addEventListener('touchmove', (e) => { e.preventDefault(); }, { passive: false });
+
+// ══════════════════════════════════════
+//  启动
+// ══════════════════════════════════════
+const playBtn = document.getElementById('playBtn');
+
+async function start() {
+  playBtn.style.opacity = '0';
+  setTimeout(() => playBtn.style.display = 'none', 1000);
+  await loadAudio();
+  startFireSound();
+  playAudio();
+  started = true;
+  startTime = performance.now();
+}
+
+playBtn.addEventListener('click', start, { once: true });
+
+tick();
+</script>
+</body>
+</html>

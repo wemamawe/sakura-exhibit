@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>燕返 · 张爱玲 · 配音版</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    background: #edeae2;
+    display: flex; align-items: center; justify-content: center;
+    min-height: 100vh; overflow: hidden;
+    touch-action:none;
+  }
+  canvas { display: block; }
+  #playBtn {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    z-index: 1000; background: rgba(0,0,0,0.55);
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; transition: opacity 0.8s;
+  }
+  #playBtn .inner {
+    text-align: center; color: #f0ece2;
+  }
+  #playBtn .title { font: 32px "Songti SC","SimSun",serif; letter-spacing: 8px; margin-bottom: 16px; }
+  #playBtn .sub { font: 14px "Songti SC","SimSun",serif; opacity: 0.6; margin-bottom: 28px; }
+  #playBtn .circle {
+    width: 72px; height: 72px; border-radius: 50%;
+    border: 2px solid rgba(240,236,226,0.5);
+    display: flex; align-items: center; justify-content: center;
+    margin: 0 auto; transition: all 0.3s;
+  }
+  #playBtn .circle:hover { background: rgba(240,236,226,0.12); }
+  #playBtn .triangle {
+    width: 0; height: 0;
+    border-top: 14px solid transparent; border-bottom: 14px solid transparent;
+    border-left: 22px solid rgba(240,236,226,0.8);
+    margin-left: 4px;
+  }
+</style>
+</head>
+<body>
+
+<div id="playBtn">
+  <div class="inner">
+    <div class="title">燕 返</div>
+    <div class="sub">张爱玲 · 一九四七</div>
+    <div class="circle"><div class="triangle"></div></div>
+  </div>
+</div>
+
+<canvas id="c"></canvas>
+
+<script type="module">
+const canvas = document.getElementById('c');
+const ctx    = canvas.getContext('2d');
+let W = window.innerWidth, H = window.innerHeight;
+canvas.width = W; canvas.height = H;
+
+function handleResize(){
+  W = window.innerWidth; H = window.innerHeight;
+  canvas.width = W; canvas.height = H;
+}
+window.addEventListener('resize', handleResize);
+
+// ══════════════════════════════════════════
+//  音频
+// ══════════════════════════════════════════
+let audioCtx, voiceBuffer, voiceSource, voiceStartTime = 0;
+let audioPlaying = false;
+
+async function loadAudio() {
+  audioCtx = new (AudioContext || webkitAudioContext)();
+  const resp = await fetch('swallow-voice.mp3');
+  const buf  = await resp.arrayBuffer();
+  voiceBuffer = await audioCtx.decodeAudioData(buf);
+}
+
+function playAudio() {
+  if (!voiceBuffer) return;
+  voiceSource = audioCtx.createBufferSource();
+  voiceSource.buffer = voiceBuffer;
+  voiceSource.connect(audioCtx.destination);
+  voiceSource.start(0);
+  voiceStartTime = audioCtx.currentTime;
+  audioPlaying = true;
+  voiceSource.onended = () => { audioPlaying = false; };
+}
+
+function getAudioTime() {
+  if (!audioPlaying || !audioCtx) return -1;
+  return audioCtx.currentTime - voiceStartTime;
+}
+
+// ══════════════════════════════════════════
+//  常量
+// ══════════════════════════════════════════
+const PX=80, PY=62, PW=360, PH=550;
+const ML=50, MT=38, LINE_H=27;
+const FONT_BODY = '15px "Songti SC","SimSun","STSong",serif';
+const FONT_TITLE= 'bold 17px "Songti SC","SimSun",serif';
+const FONT_QUOTE= 'italic 14px "Songti SC","SimSun",serif';
+const FONT_BIG  = '26px "Songti SC","SimSun",serif';
+
+// ══════════════════════════════════════════
+//  三幕内容 + 时间戳（秒）
+// ══════════════════════════════════════════
+// 每幕对应配音中的时间段
+const ACTS = [
+  {
+    type: 'overlay',
+    lines: [
+      { text: '一九四四年，上海', font: FONT_QUOTE, color: 'rgba(80,55,35,0.75)', align: 'center' },
+      { text: '', font: FONT_BODY },
+      { text: '他来了。', font: FONT_BIG, color: 'rgba(35,22,12,0.90)', align: 'center' },
+      { text: '', font: FONT_BODY },
+      { text: '她爱了。', font: FONT_BIG, color: 'rgba(35,22,12,0.90)', align: 'center' },
+    ],
+    audioStart: 0.0,    // 配音开始（秒）
+    audioEnd:   4.2,    // 配音结束
+    holdSec: 1.2,       // 停留时间
+  },
+  {
+    type: 'paper',
+    lines: [
+      '我不断地回忆，',
+      '不断地思索，',
+      '试图从过往的点滴里',
+      '找到坚持下去的理由，',
+      '可终究是徒劳。',
+      '',
+      '你曾说：',
+      '「岁月静好，现世安稳。」',
+      '',
+      '那时的我，以为',
+      '握住的就是一切。',
+    ],
+    audioStart: 4.5,
+    audioEnd:   14.0,
+    holdSec: 1.0,
+  },
+  {
+    type: 'paper',
+    lines: [
+      '兰成，',
+      '经过一年半的长时间考虑，',
+      '我已决定，不想再拖累',
+      '你了。',
+      '',
+      '后来我知道了你与小周',
+      '的事。我压着心里的火，',
+      '试图去理解，去包容。',
+      '可终究是徒劳。',
+      '',
+      '随附稿酬三十万法郎，',
+      '算是这段感情的终结。',
+      '此后你不必再来，',
+      '来信我也不会看的。',
+      '',
+      '                  爱玲',
+      '        一九四七年·六月',
+    ],
+    audioStart: 14.5,
+    audioEnd:   27.0,
+    holdSec: 1.2,
+    hasSeal: true,
+  },
+];
+
+// ══════════════════════════════════════════
+//  基于时间的动画调度
+// ══════════════════════════════════════════
+// 每幕时间线：
+//   fadeIn (0.6s) → typing (audioEnd - audioStart) → hold (holdSec) → flyOut (2.5s) → fadeOut (0.6s)
+const FADE_IN  = 0.6;
+const FADE_OUT = 0.6;
+const FLY_DUR  = 2.5;
+
+// 计算每幕的绝对时间线
+let actTimeline = [];
+let timeOffset = 0.5; // 初始延迟
+
+ACTS.forEach((act, ai) => {
+  const typeDur = act.audioEnd - act.audioStart;
+  const t = {
+    start:     timeOffset,
+    fadeInEnd:  timeOffset + FADE_IN,
+    typeStart:  timeOffset + FADE_IN,
+    typeEnd:    timeOffset + FADE_IN + typeDur,
+    holdEnd:    timeOffset + FADE_IN + typeDur + act.holdSec,
+    flyEnd:     timeOffset + FADE_IN + typeDur + act.holdSec + FLY_DUR,
+    end:        timeOffset + FADE_IN + typeDur + act.holdSec + FLY_DUR + FADE_OUT,
+  };
+  actTimeline.push(t);
+  timeOffset = t.end + 0.3;
+});
+
+const TITLE_START = timeOffset;
+const TOTAL_DUR   = timeOffset + 4.0;
+
+// ══════════════════════════════════════════
+//  预计算字符坐标
+// ══════════════════════════════════════════
+function buildCharMap(lines, type) {
+  ctx.save();
+  const map = [];
+  lines.forEach((lineObj, row) => {
+    const text = typeof lineObj === 'string' ? lineObj : lineObj.text;
+    const font = typeof lineObj === 'string' ? FONT_BODY : (lineObj.font || FONT_BODY);
+    const align= typeof lineObj === 'string' ? 'left' : (lineObj.align || 'left');
+    ctx.font = font;
+    let baseX, baseY;
+    if (type === 'overlay') {
+      baseY = PY + 120 + row * (LINE_H + 10);
+      baseX = align === 'center' ? W / 2 : PX + ML;
+    } else {
+      baseY = PY + MT + (row + 0.82) * LINE_H;
+      baseX = PX + ML;
+    }
+    let cx = baseX;
+    if (align === 'center') {
+      const tw = ctx.measureText(text).width;
+      cx = baseX - tw / 2;
+    }
+    for (let col = 0; col < text.length; col++) {
+      const ch = text[col];
+      const cw = ctx.measureText(ch).width;
+      map.push({ char: ch, x: cx + cw*0.5, y: baseY, font, color: typeof lineObj === 'object' ? lineObj.color : null, row, col });
+      cx += cw;
+    }
+  });
+  ctx.restore();
+  return map;
+}
+
+const actCharMaps = ACTS.map(a => buildCharMap(a.lines, a.type));
+
+// ══════════════════════════════════════════
+//  燕子
+// ══════════════════════════════════════════
+function drawSwallowShape(sz, wing) {
+  const flap  = Math.sin(wing);
+  const wSpan = sz * 2.8;
+  const wCurve= sz * 0.48 + flap * sz * 0.28;
+  ctx.beginPath();
+  ctx.moveTo(0,0);
+  ctx.bezierCurveTo(-wSpan*.35,-wCurve,-wSpan*.75,-wCurve*.3,-wSpan*.88,wCurve*.14);
+  ctx.bezierCurveTo(-wSpan*.58, wCurve*.48,-wSpan*.2, wCurve*.18, 0,0);
+  ctx.moveTo(0,0);
+  ctx.bezierCurveTo( wSpan*.35,-wCurve, wSpan*.75,-wCurve*.3, wSpan*.88,wCurve*.14);
+  ctx.bezierCurveTo( wSpan*.58, wCurve*.48, wSpan*.2, wCurve*.18, 0,0);
+  ctx.moveTo(0,-sz*.14);
+  ctx.ellipse(0,sz*.14,sz*.16,sz*.40,0,0,Math.PI*2);
+  const tb=sz*.52, tl=sz*.88, ts=sz*.42;
+  ctx.moveTo(-sz*.09,tb);
+  ctx.bezierCurveTo(-sz*.14,tb+tl*.5,-ts,tb+tl*.68,-ts*1.08,tb+tl);
+  ctx.moveTo( sz*.09,tb);
+  ctx.bezierCurveTo( sz*.14,tb+tl*.5, ts,tb+tl*.68, ts*1.08,tb+tl);
+  ctx.fillStyle='#191818'; ctx.strokeStyle='#191818';
+  ctx.lineWidth=sz*.16; ctx.lineCap='round';
+  ctx.fill(); ctx.stroke();
+}
+
+function drawSwallow(x,y,sz,wing,alpha,angle) {
+  if (alpha<.01) return;
+  ctx.save();
+  ctx.globalAlpha=alpha; ctx.translate(x,y);
+  if (angle) ctx.rotate(angle);
+  drawSwallowShape(sz,wing);
+  ctx.restore();
+}
+
+// ══════════════════════════════════════════
+//  信纸
+// ══════════════════════════════════════════
+function drawPaper(a) {
+  ctx.save(); ctx.globalAlpha=a;
+  ctx.shadowColor='rgba(0,0,0,0.09)'; ctx.shadowBlur=16;
+  ctx.shadowOffsetX=3; ctx.shadowOffsetY=5;
+  ctx.fillStyle='#f9f6f0'; ctx.fillRect(PX,PY,PW,PH);
+  ctx.shadowColor='transparent';
+  const nL=Math.floor((PH-MT-14)/LINE_H);
+  for(let i=0;i<=nL;i++){
+    const ly=PY+MT+i*LINE_H;
+    if(ly>PY+PH-10) break;
+    ctx.beginPath(); ctx.moveTo(PX+6,ly); ctx.lineTo(PX+PW-6,ly);
+    ctx.strokeStyle='rgba(100,140,210,0.24)'; ctx.lineWidth=.72; ctx.stroke();
+  }
+  const rx=PX+ML-10;
+  ctx.beginPath(); ctx.moveTo(rx,PY+10); ctx.lineTo(rx,PY+PH-10);
+  ctx.strokeStyle='rgba(198,52,52,0.50)'; ctx.lineWidth=1.1; ctx.stroke();
+  ctx.strokeStyle='rgba(0,0,0,0.04)'; ctx.lineWidth=1;
+  ctx.strokeRect(PX,PY,PW,PH);
+  ctx.restore();
+}
+
+function drawSeal(a) {
+  if(a<=0) return;
+  const sx=PX+PW-46, sy=PY+PH-44;
+  ctx.save(); ctx.globalAlpha=a;
+  const g=ctx.createRadialGradient(sx-3,sy-4,2,sx,sy,16);
+  g.addColorStop(0,'#ec5858'); g.addColorStop(.55,'#c02d38'); g.addColorStop(1,'#881420');
+  ctx.beginPath(); ctx.arc(sx,sy,16,0,Math.PI*2); ctx.fillStyle=g; ctx.fill();
+  ctx.strokeStyle='rgba(255,185,185,0.32)'; ctx.lineWidth=.8;
+  for(let i=0;i<6;i++){
+    const a2=(i/6)*Math.PI*2;
+    ctx.beginPath(); ctx.moveTo(sx,sy);
+    ctx.lineTo(sx+Math.cos(a2)*12,sy+Math.sin(a2)*12); ctx.stroke();
+  }
+  ctx.beginPath(); ctx.arc(sx,sy,5,0,Math.PI*2);
+  ctx.fillStyle='rgba(255,165,165,0.28)'; ctx.fill();
+  ctx.restore();
+}
+
+// ══════════════════════════════════════════
+//  字符→燕子粒子
+// ══════════════════════════════════════════
+function makeBirds(charMap) {
+  return charMap.map((cm,i)=>{
+    const angle=-Math.PI*.3+(Math.random()-.5)*Math.PI*.8;
+    const spd=.22+Math.random()*.3;
+    return {
+      ox:cm.x, oy:cm.y, x:cm.x, y:cm.y,
+      vx:Math.cos(angle)*spd, vy:Math.sin(angle)*spd-.08,
+      ax:(Math.random()-.5)*.004, ay:-.005+Math.random()*.003,
+      sz:2.6+Math.random()*1.5,
+      wing:Math.random()*Math.PI*2, wingSpd:.07+Math.random()*.05,
+      alpha:0, born:false, charIdx:i,
+      flyAngle:angle-Math.PI/2,
+    };
+  });
+}
+const actBirds = ACTS.map((_,ai) => makeBirds(actCharMaps[ai]));
+const actVisible = ACTS.map((_,ai) => new Array(actCharMaps[ai].length).fill(false));
+
+// 背景漂浮燕
+const bgBirds = Array.from({length:7},()=>{
+  const a=Math.random()*Math.PI*2, spd=.16+Math.random()*.2;
+  return { x:Math.random()*W, y:Math.random()*H, vx:Math.cos(a)*spd, vy:Math.sin(a)*spd,
+           sz:2+Math.random()*1.4, wing:Math.random()*Math.PI*2,
+           wingSpd:.05+Math.random()*.035, alpha:.07+Math.random()*.08 };
+});
+
+// ══════════════════════════════════════════
+//  绘制
+// ══════════════════════════════════════════
+function drawChars(charMap, visibleSet, globalAlpha) {
+  if (globalAlpha<=0) return;
+  ctx.save(); ctx.globalAlpha=globalAlpha;
+  ctx.textBaseline='alphabetic'; ctx.textAlign='left';
+  for (let i=0; i<charMap.length; i++) {
+    if (!visibleSet[i]) continue;
+    const cm=charMap[i];
+    ctx.font=cm.font;
+    ctx.fillStyle=cm.color||'rgba(28,18,12,0.87)';
+    const cw=ctx.measureText(cm.char).width;
+    ctx.fillText(cm.char, cm.x-cw*.5, cm.y);
+  }
+  ctx.restore();
+}
+
+function drawTitle(a) {
+  if(a<=0) return;
+  ctx.save(); ctx.globalAlpha=a; ctx.textAlign='center';
+  ctx.font='30px "Songti SC","SimSun",serif';
+  ctx.fillStyle='#241a10';
+  ctx.fillText('燕  返', W/2, H/2-30);
+  ctx.font='13px "Songti SC","SimSun",serif';
+  ctx.fillStyle='rgba(70,50,30,0.58)';
+  ctx.fillText('似曾相识燕归来', W/2, H/2-8);
+  ctx.font=FONT_QUOTE;
+  ctx.fillStyle='rgba(80,55,35,0.45)';
+  ctx.fillText('— 张爱玲  一九四七', W/2, H/2+14);
+  ctx.restore();
+}
+
+const easeOut  = t => 1-Math.pow(1-t,2);
+const easeOut3 = t => 1-Math.pow(1-t,3);
+const clamp01  = t => Math.max(0, Math.min(1, t));
+
+// ══════════════════════════════════════════
+//  主循环（基于时间而非帧数）
+// ══════════════════════════════════════════
+let startTime = 0;
+let started   = false;
+let frame     = 0;
+
+function tick() {
+  requestAnimationFrame(tick);
+  frame++;
+
+  const t = started ? (performance.now() - startTime) / 1000 : 0;
+
+  // 背景
+  ctx.fillStyle='#edeae2'; ctx.fillRect(0,0,W,H);
+
+  // 背景漂浮燕
+  const bgVis = clamp01(t / 2);
+  for(const b of bgBirds){
+    b.x+=b.vx+Math.sin(frame*.011+b.wing)*.22;
+    b.y+=b.vy+Math.cos(frame*.008+b.wing)*.16;
+    b.wing+=b.wingSpd;
+    if(b.x<-30) b.x=W+15; if(b.x>W+30) b.x=-15;
+    if(b.y<-30) b.y=H+15; if(b.y>H+30) b.y=-15;
+    drawSwallow(b.x,b.y,b.sz,b.wing,b.alpha*bgVis,0);
+  }
+
+  if (!started) return;
+
+  // ── 逐幕渲染 ──
+  ACTS.forEach((act, ai) => {
+    const tl = actTimeline[ai];
+    if (t < tl.start || t > tl.end + 1) return;
+
+    const fadeIn  = easeOut(clamp01((t - tl.start) / FADE_IN));
+    const fadeOut = t >= tl.flyEnd ? easeOut(clamp01((t - tl.flyEnd) / FADE_OUT)) : 0;
+    const actA    = fadeIn * (1 - fadeOut);
+
+    // 信纸
+    if (act.type==='paper') drawPaper(actA);
+
+    // 打字机
+    const typeProg = clamp01((t - tl.typeStart) / (tl.typeEnd - tl.typeStart));
+    const shown    = Math.floor(typeProg * actCharMaps[ai].length);
+
+    for(let i=0; i<shown; i++){
+      if(!actBirds[ai][i].born) actVisible[ai][i]=true;
+    }
+
+    // 字符绘制
+    const flyProg = t >= tl.holdEnd ? clamp01((t - tl.holdEnd) / FLY_DUR) : 0;
+    const textA   = actA * (1 - flyProg * 0.7);
+    drawChars(actCharMaps[ai], actVisible[ai], textA);
+
+    // 蜡封
+    if(act.hasSeal && t >= tl.typeEnd){
+      const sealT = clamp01((t - tl.typeEnd) / 0.5);
+      const sealFade = t >= tl.holdEnd ? Math.max(0, 1 - (t - tl.holdEnd) / 0.6) : 1;
+      drawSeal(actA * easeOut3(sealT) * sealFade);
+    }
+
+    // 字→燕
+    if (t >= tl.holdEnd) {
+      const birds = actBirds[ai];
+      const flyInterval = FLY_DUR / birds.length; // 每只鸟激活间隔
+      birds.forEach((b,i) => {
+        const activateT = tl.holdEnd + i * flyInterval;
+        if (t < activateT) return;
+        if (!b.born) { b.born=true; actVisible[ai][i]=false; }
+        const age = (t - activateT) * 60; // 等效帧数
+        b.alpha = Math.min(0.80, age/16);
+        const accelT=Math.min(1,age/85);
+        b.vx+=b.ax+accelT*(Math.random()-.5)*.003;
+        b.vy+=b.ay-accelT*.002;
+        b.vx=Math.sign(b.vx)*Math.min(Math.abs(b.vx),1.9);
+        b.vy=Math.max(b.vy,-1.7);
+        b.x+=b.vx; b.y+=b.vy; b.wing+=b.wingSpd;
+        const ta=Math.atan2(b.vy,b.vx)-Math.PI/2;
+        b.flyAngle+=(ta-b.flyAngle)*.08;
+        if(b.x<-55||b.x>W+55||b.y<-65||b.y>H+65){
+          b.x=Math.random()*W; b.y=Math.random()*H;
+          b.vx=(Math.random()-.5)*.45; b.vy=-.12-Math.random()*.28;
+          b.alpha=.10+Math.random()*.14;
+        }
+        drawSwallow(b.x,b.y,b.sz,b.wing,b.alpha,b.flyAngle);
+      });
+    }
+  });
+
+  // 最终标题
+  if(t >= TITLE_START){
+    drawTitle(easeOut(clamp01((t - TITLE_START) / 1.2)));
+  }
+}
+
+// ══════════════════════════════════════════
+//  启动
+// ══════════════════════════════════════════
+const playBtn = document.getElementById('playBtn');
+
+async function start() {
+  playBtn.style.opacity = '0';
+  setTimeout(() => playBtn.style.display = 'none', 800);
+  await loadAudio();
+  playAudio();
+  started = true;
+  startTime = performance.now();
+}
+
+playBtn.addEventListener('click', start, { once: true });
+
+tick();
+</script>
+</body>
+</html>
+</content>
+</invoke>
