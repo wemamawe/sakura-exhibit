@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>寒山 · Cold Mountain</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0d1117;overflow:hidden;touch-action:none}
+canvas{display:block}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+const canvas=document.getElementById('c');
+const ctx=canvas.getContext('2d');
+let W=innerWidth,H=innerHeight;
+canvas.width=W;canvas.height=H;
+
+// ═══════════════════════════════════════
+//  弗里德里希(Caspar David Friedrich)风格
+//  崇高美学：孤寂的人面对浩瀚自然
+//  诗：张继《枫桥夜泊》
+// ═══════════════════════════════════════
+
+const POEM = [
+  '月落乌啼霜满天',
+  '江枫渔火对愁眠',
+  '姑苏城外寒山寺',
+  '夜半钟声到客船',
+];
+const POET = '— 张继 · 枫桥夜泊';
+
+// ── 雪粒子 ──
+const SNOW_COUNT = 300;
+const snowflakes = [];
+
+class Snowflake {
+  constructor() { this.reset(true); }
+  reset(init) {
+    this.x = Math.random() * W * 1.2 - W * .1;
+    this.y = init ? Math.random() * H : -5 - Math.random() * 30;
+    this.r = .5 + Math.random() * 2.5;
+    this.vy = .3 + this.r * .25;
+    this.vx = (Math.random() - .5) * .3;
+    this.wind = Math.random() * .01;
+    this.alpha = .3 + Math.random() * .5;
+    this.wobble = Math.random() * Math.PI * 2;
+    this.wobbleSpeed = .01 + Math.random() * .02;
+  }
+  update(frame) {
+    this.wobble += this.wobbleSpeed;
+    this.x += this.vx + Math.sin(this.wobble) * .3 + Math.sin(frame * this.wind) * .2;
+    this.y += this.vy;
+    if (this.y > H + 5) this.reset(false);
+    if (this.x < -20) this.x = W + 10;
+    if (this.x > W + 20) this.x = -10;
+  }
+  draw() {
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, this.r, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(220,225,235,${this.alpha})`;
+    ctx.fill();
+  }
+}
+
+for (let i = 0; i < SNOW_COUNT; i++) snowflakes.push(new Snowflake());
+
+// ── 月亮 ──
+const MOON_X = W * .75, MOON_Y = H * .12, MOON_R = Math.min(W,H) * .055;
+
+function drawMoon(frame) {
+  // 月晕
+  const halo = ctx.createRadialGradient(MOON_X, MOON_Y, MOON_R, MOON_X, MOON_Y, MOON_R * 6);
+  halo.addColorStop(0, 'rgba(200,195,170,0.12)');
+  halo.addColorStop(.3, 'rgba(180,175,155,0.05)');
+  halo.addColorStop(1, 'rgba(150,145,130,0)');
+  ctx.fillStyle = halo;
+  ctx.fillRect(0, 0, W, H * .5);
+
+  // 月盘
+  ctx.beginPath();
+  ctx.arc(MOON_X, MOON_Y, MOON_R, 0, Math.PI * 2);
+  const mg = ctx.createRadialGradient(MOON_X - MOON_R*.2, MOON_Y - MOON_R*.2, 0, MOON_X, MOON_Y, MOON_R);
+  mg.addColorStop(0, 'rgba(240,235,215,0.95)');
+  mg.addColorStop(.6, 'rgba(220,215,195,0.85)');
+  mg.addColorStop(1, 'rgba(200,195,175,0.70)');
+  ctx.fillStyle = mg;
+  ctx.fill();
+
+  // 月面陨石坑暗纹
+  const spots = [[-.15,-.2,.12],[.2,.1,.08],[-.05,.15,.06],[.25,-.15,.05]];
+  for (const [ox,oy,or] of spots) {
+    ctx.beginPath();
+    ctx.arc(MOON_X+MOON_R*ox, MOON_Y+MOON_R*oy, MOON_R*or, 0, Math.PI*2);
+    ctx.fillStyle = 'rgba(170,165,145,0.25)';
+    ctx.fill();
+  }
+}
+
+// ── 远山层次 ──
+function drawMountainLayer(baseY, heightFactor, color, seed) {
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(0, H);
+  for (let x = 0; x <= W; x += 2) {
+    const y = baseY
+      - Math.sin((x + seed) * .002) * H * heightFactor * .6
+      - Math.sin((x + seed) * .005) * H * heightFactor * .3
+      - Math.sin((x + seed) * .013) * H * heightFactor * .1
+      - Math.pow(Math.sin((x + seed * .3) * .001), 2) * H * heightFactor * .5;
+    ctx.lineTo(x, y);
+  }
+  ctx.lineTo(W, H);
+  ctx.fill();
+}
+
+// ── 江面 ──
+function drawRiver(frame) {
+  const ry = H * .72;
+  // 水面渐变
+  const rg = ctx.createLinearGradient(0, ry, 0, H);
+  rg.addColorStop(0, 'rgba(20,30,45,0.6)');
+  rg.addColorStop(.3, 'rgba(15,22,35,0.8)');
+  rg.addColorStop(1, 'rgba(10,15,25,0.95)');
+  ctx.fillStyle = rg;
+  ctx.fillRect(0, ry, W, H - ry);
+
+  // 月亮倒影
+  const refY = ry + (ry - MOON_Y) * .3;
+  for (let i = 0; i < 8; i++) {
+    const spread = i * 3 + Math.sin(frame * .02 + i) * 2;
+    const a = .08 - i * .008;
+    if (a <= 0) continue;
+    ctx.beginPath();
+    ctx.ellipse(MOON_X + Math.sin(frame*.015+i)*2, refY + i * 6, MOON_R * (1 + i * .15), 2, 0, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(200,195,170,${a})`;
+    ctx.fill();
+  }
+
+  // 水面波纹线
+  ctx.strokeStyle = 'rgba(100,110,130,0.06)';
+  ctx.lineWidth = .5;
+  for (let i = 0; i < 12; i++) {
+    const ly = ry + 8 + i * ((H - ry) / 12);
+    ctx.beginPath();
+    for (let x = 0; x <= W; x += 4) {
+      const y = ly + Math.sin(x * .015 + frame * .02 + i) * 1.5;
+      x === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+  }
+
+  // 渔火（两三盏）
+  const fires = [
+    { x: W * .22, y: ry + 12 },
+    { x: W * .58, y: ry + 8 },
+    { x: W * .82, y: ry + 15 },
+  ];
+  for (const f of fires) {
+    const flicker = .5 + Math.sin(frame * .08 + f.x) * .2;
+    const fg = ctx.createRadialGradient(f.x, f.y, 0, f.x, f.y, 18);
+    fg.addColorStop(0, `rgba(255,180,60,${.25 * flicker})`);
+    fg.addColorStop(.4, `rgba(255,120,30,${.10 * flicker})`);
+    fg.addColorStop(1, 'rgba(200,80,20,0)');
+    ctx.fillStyle = fg;
+    ctx.fillRect(f.x - 20, f.y - 20, 40, 40);
+    ctx.beginPath();
+    ctx.arc(f.x, f.y, 1.5, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(255,220,150,${.6 * flicker})`;
+    ctx.fill();
+    // 水中倒影
+    ctx.beginPath();
+    ctx.ellipse(f.x, f.y + 10 + Math.sin(frame*.03+f.x)*1, 4, 1.5, 0, 0, Math.PI*2);
+    ctx.fillStyle = `rgba(255,160,50,${.08 * flicker})`;
+    ctx.fill();
+  }
+}
+
+// ── 孤舟剪影 ──
+function drawBoat(frame) {
+  const bx = W * .35, by = H * .73 + Math.sin(frame * .015) * 2;
+  ctx.save();
+  ctx.translate(bx, by);
+  ctx.rotate(Math.sin(frame * .012) * .02);
+  // 船体
+  ctx.beginPath();
+  ctx.moveTo(-22, 0);
+  ctx.quadraticCurveTo(-18, 8, 0, 10);
+  ctx.quadraticCurveTo(18, 8, 22, 0);
+  ctx.quadraticCurveTo(10, 3, -10, 3);
+  ctx.closePath();
+  ctx.fillStyle = '#0a0e14';
+  ctx.fill();
+  // 人影（弗里德里希标志性的背影）
+  ctx.beginPath();
+  // 身体
+  ctx.ellipse(0, -6, 3.5, 7, 0, 0, Math.PI * 2);
+  ctx.fill();
+  // 头
+  ctx.beginPath();
+  ctx.arc(0, -15, 3.5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+// ── 诗句 ──
+let poemFrame = 0;
+const POEM_DELAY = 240; // 4秒后
+
+function drawPoem(frame) {
+  if (frame < POEM_DELAY) return;
+  const elapsed = frame - POEM_DELAY;
+  ctx.save();
+  ctx.textAlign = 'right';
+  ctx.textBaseline = 'middle';
+  const fs = Math.min(16, W * .035);
+  ctx.font = `${fs}px "Songti SC","SimSun","STSong",serif`;
+
+  const sx = W * .92, sy = H * .15;
+  // 竖排，从右到左
+  POEM.forEach((line, li) => {
+    const lineDelay = li * 50;
+    const lineAlpha = Math.max(0, Math.min(1, (elapsed - lineDelay) / 80)) * .6;
+    if (lineAlpha <= 0) return;
+    const colX = sx - li * (fs + 10);
+    for (let ci = 0; ci < line.length; ci++) {
+      const charDelay = lineDelay + ci * 6;
+      const a = Math.max(0, Math.min(1, (elapsed - charDelay) / 30)) * lineAlpha;
+      if (a <= 0) continue;
+      ctx.globalAlpha = a;
+      ctx.fillStyle = 'rgba(180,185,200,1)';
+      ctx.fillText(line[ci], colX, sy + ci * (fs + 4));
+    }
+  });
+  // 诗人名
+  const poetDelay = POEM.length * 50 + 40;
+  const poetAlpha = Math.max(0, Math.min(1, (elapsed - poetDelay) / 60)) * .35;
+  if (poetAlpha > 0) {
+    ctx.globalAlpha = poetAlpha;
+    ctx.font = `${fs * .65}px "Songti SC","SimSun",serif`;
+    ctx.fillStyle = 'rgba(140,145,160,1)';
+    ctx.textAlign = 'center';
+    ctx.fillText(POET, sx - POEM.length * (fs+10) / 2, sy + 8 * (fs+4) + 20);
+  }
+  ctx.restore();
+}
+
+// ── 钟声（寒山寺） ──
+// 延迟出现，深沉悠远
+let bellPlayed = false;
+
+// ── 主循环 ──
+let frame = 0;
+
+function tick() {
+  requestAnimationFrame(tick);
+  frame++;
+
+  // 夜空渐变
+  const sky = ctx.createLinearGradient(0, 0, 0, H * .72);
+  sky.addColorStop(0, '#070b14');
+  sky.addColorStop(.4, '#0c1320');
+  sky.addColorStop(.7, '#141e2e');
+  sky.addColorStop(1, '#1a2438');
+  ctx.fillStyle = sky;
+  ctx.fillRect(0, 0, W, H);
+
+  drawMoon(frame);
+
+  // 远山（三层，由远到近，由浅到深）
+  drawMountainLayer(H * .42, .08, 'rgba(25,35,50,0.7)', 100);
+  drawMountainLayer(H * .50, .10, 'rgba(20,28,42,0.8)', 500);
+  drawMountainLayer(H * .58, .06, 'rgba(15,22,35,0.9)', 800);
+
+  // 近山雪峰
+  drawMountainLayer(H * .65, .12, '#0e1520', 300);
+  // 雪盖
+  ctx.save();
+  ctx.globalAlpha = .15;
+  ctx.fillStyle = '#c0c8d8';
+  ctx.beginPath();
+  ctx.moveTo(0, H);
+  for (let x = 0; x <= W; x += 2) {
+    const my = H * .65
+      - Math.sin((x + 300) * .002) * H * .12 * .6
+      - Math.sin((x + 300) * .005) * H * .12 * .3
+      - Math.sin((x + 300) * .013) * H * .12 * .1
+      - Math.pow(Math.sin((x + 90) * .001), 2) * H * .12 * .5;
+    const snowLine = my + H * .02;
+    if (my < snowLine) ctx.lineTo(x, my);
+    else ctx.lineTo(x, H);
+  }
+  ctx.lineTo(W, H);
+  ctx.fill();
+  ctx.restore();
+
+  drawRiver(frame);
+  drawBoat(frame);
+
+  // 雪
+  for (const s of snowflakes) { s.update(frame); s.draw(); }
+
+  drawPoem(frame);
+
+  // 整体暗角
+  const vig = ctx.createRadialGradient(W/2, H/2, Math.min(W,H)*.25, W/2, H/2, Math.max(W,H)*.75);
+  vig.addColorStop(0, 'rgba(0,0,0,0)');
+  vig.addColorStop(1, 'rgba(0,0,0,0.35)');
+  ctx.fillStyle = vig;
+  ctx.fillRect(0, 0, W, H);
+}
+
+window.addEventListener('resize', () => {
+  W = innerWidth; H = innerHeight;
+  canvas.width = W; canvas.height = H;
+});
+canvas.addEventListener('touchstart', e => e.preventDefault(), {passive:false});
+canvas.addEventListener('touchmove', e => e.preventDefault(), {passive:false});
+
+tick();
+</script>
+
+<script>
+// 寒山钟声 + 寒风
+let aCtx,master,isActive=false;
+function initAudio(){
+  if(aCtx)return;
+  aCtx=new(AudioContext||webkitAudioContext)();
+  master=aCtx.createGain();master.gain.value=0.15;master.connect(aCtx.destination);
+  // 寒风
+  const bufSz=aCtx.sampleRate*3,buf=aCtx.createBuffer(1,bufSz,aCtx.sampleRate),d=buf.getChannelData(0);
+  for(let i=0;i<bufSz;i++)d[i]=Math.random()*2-1;
+  const wind=aCtx.createBufferSource();wind.buffer=buf;wind.loop=true;
+  const bp=aCtx.createBiquadFilter();bp.type='bandpass';bp.frequency.value=300;bp.Q.value=.5;
+  const wg=aCtx.createGain();wg.gain.value=.06;
+  wind.connect(bp);bp.connect(wg);wg.connect(master);wind.start();
+  // 钟声
+  function bell(){
+    if(!isActive)return;
+    const now=aCtx.currentTime;
+    [130.81,196,261.63].forEach((f,i)=>{
+      const o=aCtx.createOscillator(),g=aCtx.createGain();
+      o.type='sine';o.frequency.value=f;
+      g.gain.setValueAtTime(0,now);
+      g.gain.linearRampToValueAtTime(.08-i*.02,now+.05);
+      g.gain.exponentialRampToValueAtTime(.001,now+4);
+      o.connect(g);g.connect(master);o.start(now);o.stop(now+4.5);
+    });
+    setTimeout(bell,6000+Math.random()*4000);
+  }
+  bell();isActive=true;
+}
+const btn=document.createElement('button');
+btn.innerHTML='🔊';
+btn.style.cssText='position:fixed;bottom:24px;right:24px;z-index:999;width:48px;height:48px;border-radius:50%;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);color:#fff;font-size:20px;cursor:pointer;backdrop-filter:blur(8px);transition:all .3s';
+document.body.appendChild(btn);
+btn.onclick=()=>{if(!aCtx)initAudio();else{isActive=!isActive;master.gain.value=isActive?.15:0;btn.style.opacity=isActive?'1':'0.5';}};
+document.addEventListener('click',()=>{if(!aCtx)initAudio();},{once:true});
+</script>
+</body>
+</html>

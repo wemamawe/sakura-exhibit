@@ -80,7 +80,7 @@
 const I18N = {
   en: {
     title: 'Blossom Gallery',
-    subtitle: 'INTERACTIVE WEB ART · 22 Scenes',
+    subtitle: 'INTERACTIVE WEB ART · 26 Scenes',
     filterAll: 'All',
     filterNature: '🌳 Nature',
     filterPoetry: '📜 Poetry',
@@ -95,7 +95,7 @@ const I18N = {
   },
   zh: {
     title: '花 · 树 · 展览馆',
-    subtitle: '交互式网页艺术 · 22 个场景',
+    subtitle: '交互式网页艺术 · 26 个场景',
     filterAll: '全部',
     filterNature: '🌳 自然',
     filterPoetry: '📜 诗词',
@@ -133,6 +133,10 @@ const scenes = [
   { file:'tears.html',    emoji:'💧', en:'Tears',             zh:'沪·泣',        sub_en:'Poetic Data Visualization',      sub_zh:'Tears·Data Art',      cat:'emotion' },
   { file:'jellyfish.html',emoji:'🪼', en:'Jellyfish Lamp',    zh:'水母灯',       sub_en:'Watercolor Fish Chandelier',     sub_zh:'Jellyfish·Watercolor',cat:'installation' },
   { file:'dreamcatcher.html',emoji:'🪺',en:'Dreamcatcher',    zh:'捕梦',         sub_en:'Pessoa · Empty to Bloom',        sub_zh:'Dreamcatcher',        cat:'installation' },
+  { file:'firefly.html',  emoji:'🪲', en:'Fireflies',        zh:'萤',           sub_en:'Summer Night · Firefly Swarm',   sub_zh:'Du Mu · Nara',        cat:'nature' },
+  { file:'snow.html',     emoji:'❄️', en:'Cold Mountain',    zh:'寒山',         sub_en:'Friedrich · Sublime Solitude',   sub_zh:'Zhang Ji · Fengqiao',  cat:'poetry' },
+  { file:'mirror.html',   emoji:'🪞', en:'Mirror Blossom',   zh:'镜花',         sub_en:'Magritte · Surreal Reflection',  sub_zh:'Mirror & Water',       cat:'installation' },
+  { file:'breath.html',   emoji:'🫁', en:'Breath',           zh:'呼吸',         sub_en:'Kapoor · Void & Pulse',          sub_zh:'Anish Kapoor',         cat:'emotion' },
 ];
 
 let lang = localStorage.getItem('blossom-lang') || 'en';

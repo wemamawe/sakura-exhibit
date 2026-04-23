@@ -1,6 +1,6 @@
 # 🌸 Blossom Gallery | 花 · 树 · 展览馆
 
-> 22 interactive web art scenes — Chinese poetry, nature, emotions, and digital installations.
+> 26 interactive web art scenes — Chinese poetry, nature, emotions, and digital installations.
 
 **[✨ Live Demo](https://wemamawe.github.io/sakura-exhibit/)**
 
@@ -38,6 +38,10 @@ Blossom Gallery is a collection of interactive visual art pieces, each a single 
 | 20 | 💧 [Tears](tears.html) | Emotion | Rain ↔ vortex dual-mode data art |
 | 21 | 🪼 [Jellyfish Lamp](jellyfish.html) | Installation | Watercolor fish chandelier |
 | 22 | 🪺 [Dreamcatcher](dreamcatcher.html) | Installation | Pessoa · empty → sprout → bloom |
+| 23 | 🪲 [Fireflies](firefly.html) | Nature | Summer night firefly swarm, Du Mu · Nara |
+| 24 | ❄️ [Cold Mountain](snow.html) | Poetry | Friedrich · sublime solitude, Zhang Ji |
+| 25 | 🪞 [Mirror Blossom](mirror.html) | Installation | Magritte · surreal water reflection |
+| 26 | 🫁 [Breath](breath.html) | Emotion | Kapoor · void pulse, heartbeat |
 
 ## Tech Stack
 

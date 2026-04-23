@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>镜花 · Mirror Blossom</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#1a1a2e;overflow:hidden;touch-action:none;cursor:none}
+canvas{display:block}
+.cursor{position:fixed;width:24px;height:24px;border:1.5px solid rgba(255,200,220,.4);border-radius:50%;pointer-events:none;z-index:999;transform:translate(-50%,-50%);transition:width .3s,height .3s;mix-blend-mode:screen}
+</style>
+</head>
+<body>
+<div class="cursor" id="cur"></div>
+<canvas id="c"></canvas>
+<script>
+const canvas=document.getElementById('c');
+const ctx=canvas.getContext('2d');
+const cur=document.getElementById('cur');
+let W=innerWidth,H=innerHeight;
+canvas.width=W;canvas.height=H;
+
+// ═══════════════════════════════════════
+//  马格利特(Magritte)风格
+//  超现实主义：现实与倒影之间的暧昧
+//  水面分割上下两个世界，花瓣跨越边界
+//  诗：李商隐 · 无题（镜中意象）
+// ═══════════════════════════════════════
+
+let mx=W/2, my=H/2;
+const MID = () => H/2; // 水面线
+
+// ── 花瓣 ──
+const PETAL_COUNT = 45;
+const petals = [];
+
+class Petal {
+  constructor() { this.reset(true); }
+  reset(init) {
+    this.x = Math.random() * W;
+    this.y = init ? Math.random() * MID() : -20 - Math.random() * 60;
+    this.r = 5 + Math.random() * 10;
+    this.angle = Math.random() * Math.PI * 2;
+    this.spin = (Math.random() - .5) * .02;
+    this.vy = .2 + Math.random() * .5;
+    this.vx = (Math.random() - .5) * .3;
+    this.wobble = Math.random() * Math.PI * 2;
+    this.wobbleSpd = .01 + Math.random() * .02;
+    // 颜色：粉白到浅红
+    this.hue = 340 + Math.random() * 30;
+    this.sat = 60 + Math.random() * 30;
+    this.lit = 75 + Math.random() * 15;
+    this.alpha = .6 + Math.random() * .3;
+    // 落水状态
+    this.inWater = false;
+    this.waterY = 0;
+    this.rippleAge = 0;
+    this.driftSpeed = .05 + Math.random() * .1;
+  }
+  update(frame) {
+    if (!this.inWater) {
+      this.wobble += this.wobbleSpd;
+      this.x += this.vx + Math.sin(this.wobble) * .4;
+      this.y += this.vy;
+      this.angle += this.spin;
+      // 落到水面
+      if (this.y >= MID() - this.r * .3) {
+        this.inWater = true;
+        this.waterY = MID();
+        this.rippleAge = 0;
+        this.vy = 0;
+        this.y = MID() - this.r * .2;
+      }
+    } else {
+      // 水面漂浮
+      this.rippleAge++;
+      this.x += this.driftSpeed + Math.sin(frame * .008 + this.x * .01) * .15;
+      this.y = MID() - this.r * .2 + Math.sin(frame * .015 + this.x * .02) * 1.5;
+      this.angle += this.spin * .3;
+      // 漂出画面
+      if (this.x > W + 30) this.reset(false);
+    }
+  }
+  draw() {
+    const col = `hsla(${this.hue},${this.sat}%,${this.lit}%,${this.alpha})`;
+    // 上方（真实）
+    this.drawPetal(this.x, this.y, this.r, this.angle, col, 1);
+    // 下方（倒影）
+    if (this.y > MID() - this.r * 2) {
+      const refY = 2 * MID() - this.y;
+      const refAlpha = this.alpha * .45;
+      const refCol = `hsla(${this.hue},${this.sat * .7}%,${this.lit * .7}%,${refAlpha})`;
+      this.drawPetal(this.x, refY, this.r, -this.angle, refCol, -1);
+    }
+    // 涟漪
+    if (this.inWater && this.rippleAge < 120) {
+      const rp = this.rippleAge / 120;
+      const rr = this.r * 2 + rp * 30;
+      ctx.beginPath();
+      ctx.ellipse(this.x, MID(), rr, rr * .2, 0, 0, Math.PI * 2);
+      ctx.strokeStyle = `rgba(200,200,220,${.15 * (1 - rp)})`;
+      ctx.lineWidth = .6;
+      ctx.stroke();
+    }
+  }
+  drawPetal(x, y, r, angle, color, scaleY) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(angle);
+    ctx.scale(1, scaleY);
+    // 花瓣形状：尖头椭圆
+    ctx.beginPath();
+    ctx.moveTo(0, -r);
+    ctx.bezierCurveTo(r * .6, -r * .6, r * .5, r * .3, 0, r);
+    ctx.bezierCurveTo(-r * .5, r * .3, -r * .6, -r * .6, 0, -r);
+    ctx.fillStyle = color;
+    ctx.fill();
+    // 花瓣脉络
+    ctx.beginPath();
+    ctx.moveTo(0, -r * .8);
+    ctx.lineTo(0, r * .6);
+    ctx.strokeStyle = `rgba(255,255,255,${.08 * Math.abs(scaleY)})`;
+    ctx.lineWidth = .5;
+    ctx.stroke();
+    ctx.restore();
+  }
+}
+
+for (let i = 0; i < PETAL_COUNT; i++) petals.push(new Petal());
+
+// ── 鼠标涟漪 ──
+const ripples = [];
+let lastRipple = 0;
+
+function addRipple(x, y) {
+  if (y < MID() - 30 || y > H) return; // 只在水面附近
+  ripples.push({ x, y: MID(), age: 0, maxR: 40 + Math.random() * 20 });
+}
+
+// ── 水面线 ──
+function drawWaterLine(frame) {
+  ctx.save();
+  ctx.strokeStyle = 'rgba(180,190,220,0.12)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  for (let x = 0; x <= W; x += 3) {
+    const y = MID() + Math.sin(x * .02 + frame * .015) * 1.5 + Math.sin(x * .05 + frame * .025) * .6;
+    x === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  }
+  ctx.stroke();
+  ctx.restore();
+}
+
+// ── 诗句（水面两侧对称显示） ──
+const POEM_LINES = ['镜花水月', '不可执持'];
+let poemAlpha = 0;
+
+function drawPoem(frame) {
+  if (frame < 180) return;
+  poemAlpha = Math.min(.4, (frame - 180) / 300);
+
+  ctx.save();
+  ctx.textAlign = 'center';
+  const fs = Math.min(20, W * .04);
+  ctx.font = `300 ${fs}px "Songti SC","SimSun",serif`;
+
+  // 上方
+  ctx.globalAlpha = poemAlpha;
+  ctx.fillStyle = 'rgba(220,215,225,1)';
+  ctx.fillText(POEM_LINES[0], W / 2, MID() - 50);
+
+  // 下方（倒影，略暗）
+  ctx.globalAlpha = poemAlpha * .4;
+  ctx.fillStyle = 'rgba(180,175,195,1)';
+  ctx.save();
+  ctx.translate(W / 2, MID() + 50);
+  ctx.scale(1, -1);
+  ctx.fillText(POEM_LINES[0], 0, 0);
+  ctx.restore();
+
+  // 第二句
+  if (frame > 300) {
+    const a2 = Math.min(.35, (frame - 300) / 300);
+    ctx.globalAlpha = a2;
+    ctx.font = `300 ${fs * .7}px "Songti SC","SimSun",serif`;
+    ctx.fillStyle = 'rgba(200,195,215,1)';
+    ctx.fillText(POEM_LINES[1], W / 2, MID() - 25);
+    ctx.globalAlpha = a2 * .35;
+    ctx.fillStyle = 'rgba(160,155,180,1)';
+    ctx.save();
+    ctx.translate(W / 2, MID() + 25);
+    ctx.scale(1, -1);
+    ctx.fillText(POEM_LINES[1], 0, 0);
+    ctx.restore();
+  }
+
+  ctx.restore();
+}
+
+// ── 主循环 ──
+let frame = 0;
+
+function tick() {
+  requestAnimationFrame(tick);
+  frame++;
+
+  // 上半：暗蓝夜空
+  const skyGrad = ctx.createLinearGradient(0, 0, 0, MID());
+  skyGrad.addColorStop(0, '#0d0d1a');
+  skyGrad.addColorStop(.5, '#141425');
+  skyGrad.addColorStop(1, '#1a1a30');
+  ctx.fillStyle = skyGrad;
+  ctx.fillRect(0, 0, W, MID());
+
+  // 下半：水面倒影（更暗，微蓝）
+  const waterGrad = ctx.createLinearGradient(0, MID(), 0, H);
+  waterGrad.addColorStop(0, '#161628');
+  waterGrad.addColorStop(.3, '#121220');
+  waterGrad.addColorStop(1, '#0a0a15');
+  ctx.fillStyle = waterGrad;
+  ctx.fillRect(0, MID(), W, H - MID());
+
+  // 水下微光（模糊倒映的天空）
+  ctx.save();
+  ctx.globalAlpha = .03;
+  ctx.drawImage(canvas, 0, 0, W, MID(), 0, H, W, -H/2);
+  ctx.restore();
+
+  drawWaterLine(frame);
+
+  // 花瓣
+  for (const p of petals) { p.update(frame); p.draw(); }
+
+  // 涟漪
+  for (let i = ripples.length - 1; i >= 0; i--) {
+    const r = ripples[i];
+    r.age++;
+    if (r.age > 90) { ripples.splice(i, 1); continue; }
+    const prog = r.age / 90;
+    const rr = r.maxR * prog;
+    ctx.beginPath();
+    ctx.ellipse(r.x, r.y, rr, rr * .15, 0, 0, Math.PI * 2);
+    ctx.strokeStyle = `rgba(200,200,225,${.12 * (1 - prog)})`;
+    ctx.lineWidth = .8;
+    ctx.stroke();
+  }
+
+  // 鼠标涟漪
+  if (frame - lastRipple > 15 && my > MID() - 50) {
+    addRipple(mx, my);
+    lastRipple = frame;
+  }
+
+  drawPoem(frame);
+
+  // 暗角
+  const vig = ctx.createRadialGradient(W/2, H/2, Math.min(W,H)*.2, W/2, H/2, Math.max(W,H)*.7);
+  vig.addColorStop(0, 'rgba(0,0,0,0)');
+  vig.addColorStop(1, 'rgba(0,0,0,0.4)');
+  ctx.fillStyle = vig;
+  ctx.fillRect(0, 0, W, H);
+}
+
+// ── 交互 ──
+function onMove(x,y){
+  mx=x; my=y;
+  cur.style.left=x+'px'; cur.style.top=y+'px';
+  // 靠近水面时光标变大
+  const distToWater = Math.abs(y - MID());
+  const scale = distToWater < 50 ? 1.5 : 1;
+  cur.style.width = (24 * scale) + 'px';
+  cur.style.height = (24 * scale) + 'px';
+}
+canvas.addEventListener('mousemove', e=>onMove(e.clientX, e.clientY));
+canvas.addEventListener('touchmove', e=>{
+  e.preventDefault(); onMove(e.touches[0].clientX, e.touches[0].clientY);
+}, {passive:false});
+canvas.addEventListener('touchstart', e=>e.preventDefault(), {passive:false});
+canvas.addEventListener('click', ()=>{ addRipple(mx, my); });
+
+window.addEventListener('resize', ()=>{
+  W=innerWidth; H=innerHeight;
+  canvas.width=W; canvas.height=H;
+});
+
+tick();
+</script>
+
+<script>
+// 水滴+环境音
+let aCtx,master,isActive=false;
+function initAudio(){
+  if(aCtx)return;
+  aCtx=new(AudioContext||webkitAudioContext)();
+  master=aCtx.createGain();master.gain.value=0.12;master.connect(aCtx.destination);
+  // 水滴
+  function drip(){
+    if(!isActive)return;
+    const now=aCtx.currentTime;
+    const f=800+Math.random()*600;
+    const o=aCtx.createOscillator(),g=aCtx.createGain();
+    o.type='sine';o.frequency.setValueAtTime(f,now);
+    o.frequency.exponentialRampToValueAtTime(f*.4,now+.15);
+    g.gain.setValueAtTime(.12,now);
+    g.gain.exponentialRampToValueAtTime(.001,now+.3);
+    o.connect(g);g.connect(master);o.start(now);o.stop(now+.4);
+    setTimeout(drip,2000+Math.random()*4000);
+  }
+  // 低频pad
+  const pad=aCtx.createOscillator(),pg=aCtx.createGain();
+  pad.type='sine';pad.frequency.value=65;pg.gain.value=.04;
+  const lp=aCtx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=100;
+  pad.connect(lp);lp.connect(pg);pg.connect(master);pad.start();
+  drip();isActive=true;
+}
+const btn=document.createElement('button');
+btn.innerHTML='🔊';
+btn.style.cssText='position:fixed;bottom:24px;right:24px;z-index:999;width:48px;height:48px;border-radius:50%;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);color:#fff;font-size:20px;cursor:pointer;backdrop-filter:blur(8px);transition:all .3s';
+document.body.appendChild(btn);
+btn.onclick=()=>{if(!aCtx)initAudio();else{isActive=!isActive;master.gain.value=isActive?.12:0;btn.style.opacity=isActive?'1':'0.5';}};
+document.addEventListener('click',()=>{if(!aCtx)initAudio();},{once:true});
+</script>
+</body>
+</html>

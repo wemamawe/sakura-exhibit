@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>萤 · Fireflies</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0a110a;overflow:hidden;touch-action:none;cursor:crosshair}
+canvas{display:block}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+const canvas=document.getElementById('c');
+const ctx=canvas.getContext('2d');
+let W=innerWidth,H=innerHeight;
+canvas.width=W;canvas.height=H;
+
+// ═══════════════════════════════════════
+//  奈良美智风：暗夜童真，暖黄萤火
+//  灵感：夏夜草丛中萤火虫明灭，
+//  杜牧「银烛秋光冷画屏，轻罗小扇扑流萤」
+// ═══════════════════════════════════════
+
+const POEM = [
+  '银烛秋光冷画屏',
+  '轻罗小扇扑流萤',
+  '天阶夜色凉如水',
+  '坐看牵牛织女星',
+];
+const POET = '— 杜牧 · 秋夕';
+
+// ── 萤火虫 ──
+const NUM = 120;
+const fireflies = [];
+let mx = W/2, my = H/2;
+
+class Firefly {
+  constructor() { this.reset(true); }
+  reset(init) {
+    this.x = Math.random()*W;
+    this.y = init ? Math.random()*H : H + 20 + Math.random()*40;
+    this.vx = (Math.random()-.5)*.4;
+    this.vy = -.15 - Math.random()*.35;
+    this.r = 1.5 + Math.random()*2.5;
+    this.phase = Math.random()*Math.PI*2;
+    this.blinkSpeed = .015 + Math.random()*.025;
+    this.maxAlpha = .5 + Math.random()*.5;
+    this.hue = 45 + Math.random()*25; // 暖黄到琥珀
+    this.trail = [];
+    this.trailLen = 4 + Math.floor(Math.random()*6);
+    // 微小随机偏转
+    this.wanderAngle = Math.random()*Math.PI*2;
+    this.wanderSpeed = .002 + Math.random()*.003;
+  }
+  update(frame) {
+    // 呼吸闪烁
+    this.phase += this.blinkSpeed;
+    const glow = Math.pow(Math.sin(this.phase), 2) * this.maxAlpha;
+
+    // 随机游走
+    this.wanderAngle += (Math.random()-.5)*.15;
+    this.vx += Math.cos(this.wanderAngle)*.008;
+    this.vy += Math.sin(this.wanderAngle)*.005;
+
+    // 轻微被鼠标吸引（远距离）
+    const dx = mx - this.x, dy = my - this.y;
+    const dist = Math.hypot(dx,dy);
+    if (dist > 30 && dist < 350) {
+      const force = .0003 / (dist*.01 + 1);
+      this.vx += dx * force;
+      this.vy += dy * force;
+    }
+    // 太近则排斥
+    if (dist < 60) {
+      const repel = .02 * (60 - dist) / 60;
+      this.vx -= dx/dist * repel;
+      this.vy -= dy/dist * repel;
+    }
+
+    // 阻尼
+    this.vx *= .985;
+    this.vy *= .985;
+
+    // 微小上升趋势
+    this.vy -= .003;
+
+    this.x += this.vx;
+    this.y += this.vy;
+
+    // 轨迹
+    this.trail.push({x:this.x, y:this.y, a:glow});
+    if (this.trail.length > this.trailLen) this.trail.shift();
+
+    // 边界
+    if (this.x < -20 || this.x > W+20 || this.y < -40 || this.y > H+40) this.reset(false);
+
+    return glow;
+  }
+  draw(glow) {
+    if (glow < .02) return;
+    // 轨迹
+    for (let i=0; i<this.trail.length-1; i++) {
+      const t = this.trail[i];
+      const a = t.a * (i / this.trail.length) * .3;
+      if (a < .01) continue;
+      ctx.beginPath();
+      ctx.arc(t.x, t.y, this.r*.6, 0, Math.PI*2);
+      ctx.fillStyle = `hsla(${this.hue},90%,65%,${a})`;
+      ctx.fill();
+    }
+    // 外光晕
+    const g = ctx.createRadialGradient(this.x,this.y, 0, this.x,this.y, this.r*12);
+    g.addColorStop(0, `hsla(${this.hue},95%,75%,${glow*.35})`);
+    g.addColorStop(.3,`hsla(${this.hue},90%,55%,${glow*.15})`);
+    g.addColorStop(1, `hsla(${this.hue},80%,40%,0)`);
+    ctx.fillStyle = g;
+    ctx.fillRect(this.x-this.r*12, this.y-this.r*12, this.r*24, this.r*24);
+    // 核心亮点
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, this.r, 0, Math.PI*2);
+    ctx.fillStyle = `hsla(${this.hue},100%,88%,${glow})`;
+    ctx.fill();
+    // 内核白点
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, this.r*.4, 0, Math.PI*2);
+    ctx.fillStyle = `rgba(255,255,240,${glow*.8})`;
+    ctx.fill();
+  }
+}
+
+for (let i=0; i<NUM; i++) fireflies.push(new Firefly());
+
+// ── 草丛剪影 ──
+function drawGrass() {
+  const grassH = H * .18;
+  const baseY = H;
+  ctx.save();
+  // 近景草（深色）
+  ctx.fillStyle = '#050d05';
+  ctx.beginPath();
+  ctx.moveTo(0, baseY);
+  for (let x = 0; x <= W; x += 3) {
+    const h = grassH * (.5 + Math.sin(x*.02)*.2 + Math.sin(x*.05)*.15 + Math.sin(x*.12)*.1);
+    ctx.lineTo(x, baseY - h);
+  }
+  ctx.lineTo(W, baseY);
+  ctx.fill();
+  // 中景草（稍亮）
+  ctx.fillStyle = '#081408';
+  ctx.beginPath();
+  ctx.moveTo(0, baseY);
+  for (let x = 0; x <= W; x += 4) {
+    const h = grassH * .65 * (.5 + Math.sin(x*.03+1)*.25 + Math.sin(x*.08+2)*.15);
+    ctx.lineTo(x, baseY - h);
+  }
+  ctx.lineTo(W, baseY);
+  ctx.fill();
+  ctx.restore();
+}
+
+// ── 远山剪影 ──
+function drawMountains() {
+  ctx.save();
+  ctx.fillStyle = '#0c180c';
+  ctx.beginPath();
+  ctx.moveTo(0, H);
+  for (let x = 0; x <= W; x += 2) {
+    const y = H*.55 + Math.sin(x*.003)* H*.08 + Math.sin(x*.007+1)*H*.04 + Math.sin(x*.015+3)*H*.02;
+    ctx.lineTo(x, y);
+  }
+  ctx.lineTo(W, H);
+  ctx.fill();
+  ctx.restore();
+}
+
+// ── 星空 ──
+const stars = Array.from({length:80}, ()=>({
+  x: Math.random()*W, y: Math.random()*H*.5,
+  r: .3+Math.random()*1.2, phase: Math.random()*Math.PI*2,
+  speed: .005+Math.random()*.01
+}));
+
+function drawStars(frame) {
+  for (const s of stars) {
+    s.phase += s.speed;
+    const a = .2 + Math.sin(s.phase)*.15;
+    ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, Math.PI*2);
+    ctx.fillStyle = `rgba(200,210,230,${a})`;
+    ctx.fill();
+  }
+}
+
+// ── 诗句淡入 ──
+let poemAlpha = 0;
+const POEM_START = 180; // 3秒后开始
+const POEM_FADE = 180;  // 3秒渐入
+
+function drawPoem(frame) {
+  if (frame < POEM_START) return;
+  poemAlpha = Math.min(1, (frame - POEM_START) / POEM_FADE) * .55;
+  ctx.save();
+  ctx.globalAlpha = poemAlpha;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  const fontSize = Math.min(18, W * .04);
+  ctx.font = `${fontSize}px "Songti SC","SimSun","STSong",serif`;
+  ctx.fillStyle = 'rgba(200,210,170,1)';
+  const startY = H * .12;
+  POEM.forEach((line, i) => {
+    const lineAlpha = Math.max(0, Math.min(1, (frame - POEM_START - i*45) / 60));
+    ctx.globalAlpha = poemAlpha * lineAlpha;
+    ctx.fillText(line, W/2, startY + i * (fontSize + 12));
+  });
+  // 诗人
+  const poetAlpha = Math.max(0, Math.min(1, (frame - POEM_START - POEM.length*45) / 60));
+  ctx.globalAlpha = poemAlpha * poetAlpha * .6;
+  ctx.font = `${fontSize*.7}px "Songti SC","SimSun",serif`;
+  ctx.fillStyle = 'rgba(160,170,130,1)';
+  ctx.fillText(POET, W/2, startY + POEM.length * (fontSize+12) + 16);
+  ctx.restore();
+}
+
+// ── 主循环 ──
+let frame = 0;
+
+function tick() {
+  requestAnimationFrame(tick);
+  frame++;
+
+  // 暗夜渐变背景
+  const bg = ctx.createLinearGradient(0,0,0,H);
+  bg.addColorStop(0, '#050a12'); // 深蓝夜空
+  bg.addColorStop(.35,'#0a1108');
+  bg.addColorStop(.65,'#0c1a0a');
+  bg.addColorStop(1, '#081408');
+  ctx.fillStyle = bg;
+  ctx.fillRect(0,0,W,H);
+
+  drawStars(frame);
+  drawMountains();
+
+  // 萤火虫
+  for (const f of fireflies) {
+    const glow = f.update(frame);
+    f.draw(glow);
+  }
+
+  drawGrass();
+  drawPoem(frame);
+}
+
+// ── 交互 ──
+function onMove(x,y){ mx=x; my=y; }
+canvas.addEventListener('mousemove', e => onMove(e.clientX, e.clientY));
+canvas.addEventListener('touchmove', e => {
+  e.preventDefault();
+  onMove(e.touches[0].clientX, e.touches[0].clientY);
+}, {passive:false});
+canvas.addEventListener('touchstart', e => e.preventDefault(), {passive:false});
+
+window.addEventListener('resize', ()=>{
+  W=innerWidth; H=innerHeight;
+  canvas.width=W; canvas.height=H;
+  stars.forEach(s=>{ s.x=Math.random()*W; s.y=Math.random()*H*.5; });
+});
+
+tick();
+</script>
+
+<script>
+// 夏虫音效：蟋蟀+夜风
+let aCtx,master,isActive=false;
+function initAudio(){
+  if(aCtx)return;
+  aCtx=new(AudioContext||webkitAudioContext)();
+  master=aCtx.createGain();master.gain.value=0.12;master.connect(aCtx.destination);
+  // 蟋蟀chirp
+  function chirp(){
+    if(!isActive)return;
+    const now=aCtx.currentTime;
+    const f=3800+Math.random()*1200;
+    for(let i=0;i<3+Math.floor(Math.random()*3);i++){
+      const o=aCtx.createOscillator(),g=aCtx.createGain();
+      o.type='sine';o.frequency.value=f+Math.random()*200;
+      const t=now+i*.08;
+      g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(.06,t+.01);
+      g.gain.exponentialRampToValueAtTime(.001,t+.06);
+      o.connect(g);g.connect(master);o.start(t);o.stop(t+.08);
+    }
+    setTimeout(chirp,1200+Math.random()*3000);
+  }
+  // 夜风底噪
+  const bufSz=aCtx.sampleRate*3,buf=aCtx.createBuffer(1,bufSz,aCtx.sampleRate),d=buf.getChannelData(0);
+  for(let i=0;i<bufSz;i++)d[i]=Math.random()*2-1;
+  const wind=aCtx.createBufferSource();wind.buffer=buf;wind.loop=true;
+  const lp=aCtx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=180;
+  const wg=aCtx.createGain();wg.gain.value=.04;
+  wind.connect(lp);lp.connect(wg);wg.connect(master);wind.start();
+  chirp();isActive=true;
+}
+const btn=document.createElement('button');
+btn.innerHTML='🔊';
+btn.style.cssText='position:fixed;bottom:24px;right:24px;z-index:999;width:48px;height:48px;border-radius:50%;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);color:#fff;font-size:20px;cursor:pointer;backdrop-filter:blur(8px);transition:all .3s';
+btn.onmouseover=()=>btn.style.background='rgba(255,255,255,0.15)';
+btn.onmouseout=()=>btn.style.background='rgba(255,255,255,0.08)';
+document.body.appendChild(btn);
+btn.onclick=()=>{if(!aCtx)initAudio();else{isActive=!isActive;master.gain.value=isActive?.12:0;btn.style.opacity=isActive?'1':'0.5';}};
+document.addEventListener('click',()=>{if(!aCtx)initAudio();},{once:true});
+</script>
+</body>
+</html>
