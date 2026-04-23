@@ -255,108 +255,123 @@ for(let i=0;i<N;i++){
 }
 
 // ═══════════════════════════════════════
-//  编排式双剑 — 9次碰撞，由远及近
-//  前4次间距大节奏慢，后5次密集猛烈
+//  编排式双剑 — 有快有慢，层层递进，镜头有远有近
+//
+//  第一幕 试探（9-11s）：远景，剑小，缓慢逼近，1次碰撞
+//  第二幕 交锋（11-14s）：中景，剑渐大，节奏加快，2次碰撞
+//  第三幕 激战（14-17s）：近景，剑大，电光火石，3次碰撞
+//  第四幕 终击（17-18.5s）：特写，最后3连击，爆裂
 // ═══════════════════════════════════════
 function baseSwordLen(){return Math.min(W,H)*.38;}
 
 const sAs={x:0,y:0,angle:0,sc:1};
 const sBs={x:0,y:0,angle:0,sc:1};
 let clashFlash=0,clashFx=0,clashFy=0;
-let nextClash=0; // 下一个碰撞序号
+let nextClash=0;
 
-// 碰撞编排表
-// t=碰撞时刻, sc=此时剑的scale(由远及近), n=落字数量, str=迸溅力度
+// 碰撞编排
+// sc=剑大小, zoom=镜头缩放, spd=运动速度倍率
 const clashes=[
-  // 前4次：由远及近，间隔~1.5s
-  {t:10,  sc:.35, n:25, str:.8},
-  {t:11.5,sc:.45, n:30, str:.9},
-  {t:13,  sc:.55, n:35, str:1.0},
-  {t:14.5,sc:.65, n:40, str:1.1},
-  // 后5次：越来越密集猛烈
-  {t:15.5,sc:.75, n:50, str:1.2},
-  {t:16.3,sc:.82, n:55, str:1.3},
-  {t:17,  sc:.88, n:65, str:1.4},
-  {t:17.5,sc:.94, n:75, str:1.5},
-  {t:17.9,sc:1.0, n:90, str:1.7},
+  // 第一幕 试探：远景、慢
+  {t:10.5,sc:.3, zoom:1, n:20, str:.7, spd:.4},
+  // 第二幕 交锋：中景、加速
+  {t:12,  sc:.45,zoom:1.2, n:30, str:.9, spd:.7},
+  {t:13.2,sc:.55,zoom:1.3, n:35, str:1.0,spd:.9},
+  // 第三幕 激战：近景、快
+  {t:14.2,sc:.65,zoom:1.5, n:45, str:1.1,spd:1.2},
+  {t:15,  sc:.75,zoom:1.6, n:50, str:1.2,spd:1.5},
+  {t:15.8,sc:.82,zoom:1.7, n:60, str:1.3,spd:1.8},
+  // 第四幕 终击：特写、极快、连续
+  {t:16.5,sc:.9, zoom:1.9, n:70, str:1.5,spd:2.2},
+  {t:17,  sc:.95,zoom:2.0, n:80, str:1.6,spd:2.5},
+  {t:17.4,sc:1.0,zoom:2.2, n:100,str:1.8,spd:3.0},
 ];
 
-// 两剑运动：从两侧对冲→碰撞→弹开→再对冲
-// 状态机：approach(对冲) / clash(碰撞瞬间) / recoil(弹开)
-let swordPhase='wait'; // wait/approach/recoil
-let phaseT=0; // 当前phase开始时间
-let recoilAngle=0; // 弹开方向
+let swordPhase='wait';
+let phaseT=0;
+let recoilAngle=0;
+let curZoom=1; // 当前镜头zoom（平滑插值）
+let curSpd=.3; // 当前运动速度
 
 function getSwordState(t){
-  if(t<9)return; // 还没开始
+  if(t<9)return;
   
-  // 当前scale：根据碰撞表插值
-  let sc=.3;
+  // 插值 scale, zoom, spd
+  let sc=.25,targetZoom=1,targetSpd=.3;
   if(nextClash<clashes.length){
-    // 在当前碰撞前渐变
     const ci=clashes[nextClash];
-    const prevSc=nextClash>0?clashes[nextClash-1].sc:.25;
+    const prevSc=nextClash>0?clashes[nextClash-1].sc:.2;
+    const prevZoom=nextClash>0?clashes[nextClash-1].zoom:1;
+    const prevSpd=nextClash>0?clashes[nextClash-1].spd:.3;
     const prevT=nextClash>0?clashes[nextClash-1].t:9;
     const p=Math.min(1,(t-prevT)/(ci.t-prevT));
     sc=prevSc+(ci.sc-prevSc)*p;
+    targetZoom=prevZoom+(ci.zoom-prevZoom)*p;
+    targetSpd=prevSpd+(ci.spd-prevSpd)*p;
   }else{
-    sc=1;
+    sc=1;targetZoom=1.5;targetSpd=.5;
   }
+  // 平滑过渡
+  curZoom+=(targetZoom-curZoom)*.05;
+  curSpd+=(targetSpd-curSpd)*.08;
   
   const cx=W*.5,cy=H*.43;
   
-  // 检测碰撞时刻
+  // 碰撞检测
   if(nextClash<clashes.length&&t>=clashes[nextClash].t){
     const ci=clashes[nextClash];
     clashFlash=1;
     clashFx=cx;clashFy=cy;
     spawnFall(cx,cy,ci.n,ci.str);
     addSpark(cx,cy,Math.floor(ci.n*.3));
-    playClash(ci.str/1.7);
-    recoilAngle=Math.random()*Math.PI*2; // 随机弹开方向
+    playClash(ci.str/1.8);
+    recoilAngle=Math.random()*Math.PI*2;
     swordPhase='recoil';phaseT=t;
     nextClash++;
   }
   
-  // 计算两剑位置
-  let sepX,sepY; // 两剑相对中心的偏移
-  const swordR=Math.min(W,H)*.12; // 运动半径
+  let sepX,sepY;
+  // 运动半径随剑的大小变化：剑小时离得远，剑大时贴近
+  const swordR=Math.min(W,H)*(.15-.06*sc);
   
   if(swordPhase==='recoil'){
-    // 弹开：快速分开然后回来
     const rt=t-phaseT;
-    const recoilDist=swordR*(1-Math.min(1,rt/.6)); // 0.6秒回弹
-    const wobble=Math.sin(rt*15)*swordR*.08*Math.max(0,1-rt/.3); // 震颤
+    // 弹开时间也随节奏变化：越快越短
+    const recoilTime=Math.max(.25,.6-curSpd*.12);
+    const rp=Math.min(1,rt/recoilTime);
+    const recoilDist=swordR*(1-rp);
+    // 震颤：越猆烈越强
+    const wobbleStr=swordR*(.05+curSpd*.02);
+    const wobble=Math.sin(rt*18)*wobbleStr*Math.max(0,1-rp);
     sepX=Math.cos(recoilAngle)*(recoilDist+wobble);
     sepY=Math.sin(recoilAngle)*(recoilDist+wobble)*.7;
-    if(rt>.6){swordPhase='approach';phaseT=t;}
+    if(rp>=1){swordPhase='approach';phaseT=t;}
   }else{
-    // 对冲：从两侧向中心靠近
-    let approachP;
+    // 对冲：速度有快有慢
+    let approachP=0;
     if(nextClash<clashes.length){
       const nextT=clashes[nextClash].t;
       const startT=swordPhase==='wait'?9:phaseT;
-      approachP=Math.min(1,(t-startT)/(nextT-startT));
-    }else{
-      approachP=0;
+      const dur=nextT-startT;
+      if(dur>0) approachP=Math.min(1,(t-startT)/dur);
     }
-    // smooth ease in
-    const ep=approachP*approachP;
-    const dist=swordR*(1-ep*.85); // 从远处逼近
-    // 旋转运动：慢速旋转
-    const rotSpd=.8+sc*.5;
-    const rotAngle=(t-9)*rotSpd;
+    // 缓动：慢→快→慢（先蕴力再冲刺）
+    const ep=approachP<.7
+      ? approachP/.7*approachP/.7*.3  // 前70%时间只走了30%距离（蓄势）
+      : .3+((approachP-.7)/.3)*((approachP-.7)/.3)*.7; // 后30%冲刺剩下70%
+    const dist=swordR*(1-ep*.9);
+    // 旋转速度随节奏变化
+    const rotAngle=(t-9)*curSpd*1.2;
     sepX=Math.cos(rotAngle)*dist;
-    sepY=Math.sin(rotAngle)*dist*.7;
+    sepY=Math.sin(rotAngle)*dist*.65;
   }
   
   sAs.x=cx+sepX;sAs.y=cy+sepY;sAs.sc=sc;
   sBs.x=cx-sepX;sBs.y=cy-sepY;sBs.sc=sc;
-  // 剑尖朝向对方
   sAs.angle=Math.atan2(sBs.y-sAs.y,sBs.x-sAs.x)-Math.PI/2;
   sBs.angle=Math.atan2(sAs.y-sBs.y,sAs.x-sBs.x)-Math.PI/2;
   
-  if(clashFlash>0)clashFlash*=.88;
+  if(clashFlash>0)clashFlash*=.86;
 }
 
 // ═══════════════════════════════════════
@@ -501,8 +516,11 @@ function getZoom(t){
   if(t<5)return 1;
   if(t<6)return 1+2*(t-5);
   if(t<8)return 3;
-  if(t<10)return 3-2*((t-8)/2);
-  return 1;
+  if(t<9.5)return 3-2*((t-8)/1.5); // 拉远到正常
+  // 厮杀阶段：用curZoom（由碰撞表驱动）
+  if(t<18.5)return curZoom;
+  // 归无：慢慢拉远
+  return Math.max(1,curZoom-(t-18.5)*.5);
 }
 
 // ═══════════════════════════════════════
