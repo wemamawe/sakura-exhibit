@@ -1,0 +1,681 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>本命字 · 剑来</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#080810;overflow:hidden;touch-action:none}
+canvas{display:block}
+#playBtn{position:fixed;top:0;left:0;width:100%;height:100%;z-index:1000;
+  background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;
+  cursor:pointer;transition:opacity 1s}
+#playBtn .inner{text-align:center;color:#d4c8a0}
+#playBtn .title{font:36px "Songti SC","SimSun","KaiTi",serif;letter-spacing:12px;margin-bottom:14px;
+  text-shadow:0 0 30px rgba(255,200,80,.3)}
+#playBtn .sub{font:14px "Songti SC","SimSun",serif;opacity:.45;margin-bottom:28px}
+#playBtn .circle{width:70px;height:70px;border-radius:50%;
+  border:1.5px solid rgba(212,200,160,.35);display:flex;align-items:center;justify-content:center;
+  margin:0 auto;transition:all .3s}
+#playBtn .circle:hover{background:rgba(212,200,160,.08);border-color:rgba(212,200,160,.6)}
+#playBtn .tri{width:0;height:0;border-top:13px solid transparent;border-bottom:13px solid transparent;
+  border-left:20px solid rgba(212,200,160,.65);margin-left:4px}
+</style>
+</head>
+<body>
+<div id="playBtn"><div class="inner">
+  <div class="title">本 命 字</div>
+  <div class="sub">千万经典 · 凝形厮杀 · 归于文字</div>
+  <div class="circle"><div class="tri"></div></div>
+</div></div>
+<canvas id="c"></canvas>
+<script type="module">
+import * as Pretext from 'https://esm.sh/@chenglou/pretext';
+
+const canvas=document.getElementById('c');
+const ctx=canvas.getContext('2d');
+let W=innerWidth,H=innerHeight;
+canvas.width=W;canvas.height=H;
+
+// ═══════════════════════════════════════
+//  儒家经典文字库
+// ═══════════════════════════════════════
+const CLASSICS = [
+  // 论语
+  '学而时习之不亦说乎有朋自远方来不亦乐乎人不知而不愠不亦君子乎',
+  '吾日三省吾身为人谋而不忠乎与朋友交而不信乎传不习乎',
+  '温故而知新可以为师矣学而不思则罔思而不学则殆',
+  '知之为知之不知为不知是知也三人行必有我师焉',
+  '己所不欲勿施于人君子坦荡荡小人长戚戚',
+  '士不可以不弘毅任重而道远仁以为己任不亦重乎死而后已不亦远乎',
+  // 大学
+  '大学之道在明明德在亲民在止于至善知止而后有定定而后能静',
+  '格物致知诚意正心修身齐家治国平天下',
+  // 中庸
+  '天命之谓性率性之谓道修道之谓教道也者不可须臾离也',
+  '博学之审问之慎思之明辨之笃行之',
+  // 孟子
+  '天将降大任于是人也必先苦其心志劳其筋骨饿其体肤空乏其身',
+  '穷则独善其身达则兼善天下',
+  '民为贵社稷次之君为轻',
+  '富贵不能淫贫贱不能移威武不能屈此之谓大丈夫',
+  // 周易
+  '天行健君子以自强不息地势坤君子以厚德载物',
+  '积善之家必有余庆积不善之家必有余殃',
+  // 尚书
+  '人心惟危道心惟微惟精惟一允执厥中',
+  // 礼记
+  '玉不琢不成器人不学不知道是故古之王者建国君民教学为先',
+].join('');
+
+function randChar(){ return CLASSICS[Math.floor(Math.random()*CLASSICS.length)]; }
+
+// ═══════════════════════════════════════
+//  龙形路径（贝塞尔曲线采样）
+// ═══════════════════════════════════════
+function dragonPath(cx, cy, scale, frame) {
+  const pts = [];
+  const segments = 120;
+  for (let i = 0; i <= segments; i++) {
+    const t = i / segments;
+    // 蜿蜒的龙身：S形主体 + 头部上翘 + 尾部卷曲
+    const bodyX = cx + (t - 0.5) * scale * 2.2;
+    const bodyY = cy + Math.sin(t * Math.PI * 3 + frame * 0.03) * scale * 0.35
+                     + Math.sin(t * Math.PI * 1.5) * scale * 0.15;
+    // 头部（t→1时上翘）
+    const headLift = Math.pow(Math.max(0, t - 0.85) / 0.15, 2) * scale * 0.4;
+    // 尾部（t→0时下卷）
+    const tailCurl = Math.pow(Math.max(0, 0.1 - t) / 0.1, 2) * scale * 0.25;
+    pts.push({
+      x: bodyX,
+      y: bodyY - headLift + tailCurl,
+      width: (Math.sin(t * Math.PI) * 0.6 + 0.2) * scale * 0.18, // 粗细变化
+    });
+  }
+  return pts;
+}
+
+// ═══════════════════════════════════════
+//  虎形路径
+// ═══════════════════════════════════════
+function tigerPath(cx, cy, scale, frame) {
+  const pts = [];
+  const segments = 100;
+  for (let i = 0; i <= segments; i++) {
+    const t = i / segments;
+    // 虎的姿态：弓身扑击
+    const bodyX = cx + (t - 0.5) * scale * 1.6;
+    // 背部弧线
+    const spine = -Math.sin(t * Math.PI) * scale * 0.3;
+    // 前扑姿态
+    const lunge = Math.pow(Math.max(0, t - 0.7) / 0.3, 1.5) * scale * 0.2;
+    // 头部抬起
+    const headRise = Math.pow(Math.max(0, t - 0.9) / 0.1, 2) * scale * 0.15;
+    // 动态呼吸
+    const breath = Math.sin(frame * 0.04 + t * 2) * scale * 0.02;
+    pts.push({
+      x: bodyX,
+      y: cy + spine + lunge - headRise + breath,
+      width: (Math.sin(t * Math.PI * 0.85 + 0.2) * 0.5 + 0.25) * scale * 0.22,
+    });
+  }
+  return pts;
+}
+
+// ═══════════════════════════════════════
+//  文字粒子系统
+// ═══════════════════════════════════════
+const TOTAL = 2000;
+const particles = [];
+
+class TextParticle {
+  constructor(i) {
+    this.idx = i;
+    this.char = randChar();
+    this.x = Math.random() * W;
+    this.y = -Math.random() * H * 2; // 从天空出发
+    this.vx = (Math.random() - 0.5) * 1;
+    this.vy = 1 + Math.random() * 3;
+    this.targetX = 0;
+    this.targetY = 0;
+    this.size = 8 + Math.random() * 8;
+    this.alpha = 0;
+    this.rotation = (Math.random() - 0.5) * 0.5;
+    this.rotAngle = Math.random() * Math.PI * 2;
+    this.phase = Math.random() * Math.PI * 2;
+    // 颜色：金色系
+    this.hue = 35 + Math.random() * 20;
+    this.lit = 50 + Math.random() * 30;
+    // 状态
+    this.state = 'rain'; // rain → gather → form → clash → scatter → fall
+    this.formTarget = null; // {x, y} 凝形目标
+    this.side = i < TOTAL / 2 ? 'dragon' : 'tiger';
+    this.clashVx = 0;
+    this.clashVy = 0;
+    this.glowIntensity = 0;
+  }
+
+  setRain() {
+    this.state = 'rain';
+    this.x = Math.random() * W;
+    this.y = -20 - Math.random() * H;
+    this.vx = (Math.random() - 0.5) * 0.8;
+    this.vy = 2 + Math.random() * 4;
+    this.alpha = 0.2 + Math.random() * 0.5;
+  }
+
+  setGather(tx, ty) {
+    this.state = 'gather';
+    this.formTarget = { x: tx, y: ty };
+    this.glowIntensity = 0;
+  }
+
+  setForm() {
+    this.state = 'form';
+    this.glowIntensity = 0.5 + Math.random() * 0.5;
+  }
+
+  setClash(vx, vy) {
+    this.state = 'clash';
+    this.clashVx = vx + (Math.random() - 0.5) * 3;
+    this.clashVy = vy + (Math.random() - 0.5) * 3;
+    this.glowIntensity = 1;
+  }
+
+  setScatter() {
+    this.state = 'scatter';
+    const angle = Math.random() * Math.PI * 2;
+    const speed = 2 + Math.random() * 6;
+    this.vx = Math.cos(angle) * speed;
+    this.vy = Math.sin(angle) * speed;
+    this.glowIntensity = 1;
+  }
+
+  setFall() {
+    this.state = 'fall';
+    this.vy = 0.3 + Math.random() * 1;
+    this.vx = (Math.random() - 0.5) * 0.5;
+    this.glowIntensity = 0;
+  }
+
+  update(dt) {
+    this.rotAngle += this.rotation * dt;
+    this.phase += 0.02;
+
+    switch (this.state) {
+      case 'rain':
+        this.x += this.vx;
+        this.y += this.vy;
+        this.alpha = Math.min(0.7, this.alpha + 0.005);
+        if (this.y > H + 20) { this.y = -20; this.x = Math.random() * W; }
+        break;
+
+      case 'gather': {
+        if (!this.formTarget) break;
+        const dx = this.formTarget.x - this.x;
+        const dy = this.formTarget.y - this.y;
+        const dist = Math.hypot(dx, dy);
+        const force = Math.min(0.08, 800 / (dist * dist + 100));
+        this.vx += dx * force;
+        this.vy += dy * force;
+        this.vx *= 0.92;
+        this.vy *= 0.92;
+        this.x += this.vx;
+        this.y += this.vy;
+        this.alpha = Math.min(0.9, this.alpha + 0.01);
+        this.glowIntensity = Math.min(0.6, this.glowIntensity + 0.005);
+        break;
+      }
+
+      case 'form': {
+        if (!this.formTarget) break;
+        const dx = this.formTarget.x - this.x;
+        const dy = this.formTarget.y - this.y;
+        this.x += dx * 0.06;
+        this.y += dy * 0.06;
+        this.alpha = 0.85 + Math.sin(this.phase) * 0.1;
+        break;
+      }
+
+      case 'clash':
+        this.x += this.clashVx;
+        this.y += this.clashVy;
+        this.clashVx *= 0.98;
+        this.clashVy *= 0.98;
+        this.alpha = Math.max(0.3, this.alpha - 0.003);
+        this.glowIntensity *= 0.995;
+        break;
+
+      case 'scatter':
+        this.x += this.vx;
+        this.y += this.vy;
+        this.vx *= 0.96;
+        this.vy *= 0.96;
+        this.vy += 0.02; // 重力
+        this.alpha = Math.max(0.1, this.alpha - 0.004);
+        this.glowIntensity *= 0.98;
+        break;
+
+      case 'fall':
+        this.x += this.vx + Math.sin(this.phase) * 0.3;
+        this.y += this.vy;
+        this.alpha = Math.max(0.05, this.alpha - 0.001);
+        this.rotation *= 0.999;
+        if (this.y > H + 20) { this.y = -10; this.alpha = 0.15; }
+        break;
+    }
+  }
+
+  draw() {
+    if (this.alpha < 0.02) return;
+    ctx.save();
+    ctx.translate(this.x, this.y);
+    ctx.rotate(this.rotAngle);
+
+    // 光晕
+    if (this.glowIntensity > 0.05) {
+      const glowR = this.size * (1.5 + this.glowIntensity);
+      const g = ctx.createRadialGradient(0, 0, 0, 0, 0, glowR);
+      g.addColorStop(0, `hsla(${this.hue},90%,70%,${this.alpha * this.glowIntensity * 0.3})`);
+      g.addColorStop(1, `hsla(${this.hue},80%,50%,0)`);
+      ctx.fillStyle = g;
+      ctx.fillRect(-glowR, -glowR, glowR * 2, glowR * 2);
+    }
+
+    // 文字
+    ctx.font = `${this.size}px "Songti SC","SimSun","KaiTi",serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = `hsla(${this.hue},85%,${this.lit}%,${this.alpha})`;
+    ctx.fillText(this.char, 0, 0);
+
+    ctx.restore();
+  }
+}
+
+for (let i = 0; i < TOTAL; i++) particles.push(new TextParticle(i));
+
+// ═══════════════════════════════════════
+//  碰撞火花
+// ═══════════════════════════════════════
+const sparks = [];
+class Spark {
+  constructor(x, y) {
+    this.x = x; this.y = y;
+    const angle = Math.random() * Math.PI * 2;
+    const speed = 3 + Math.random() * 8;
+    this.vx = Math.cos(angle) * speed;
+    this.vy = Math.sin(angle) * speed;
+    this.life = 1;
+    this.r = 1 + Math.random() * 2;
+    this.hue = 30 + Math.random() * 30;
+  }
+  update() {
+    this.x += this.vx; this.y += this.vy;
+    this.vx *= 0.95; this.vy *= 0.95;
+    this.vy += 0.05;
+    this.life -= 0.015;
+  }
+  draw() {
+    if (this.life <= 0) return;
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, this.r * this.life, 0, Math.PI * 2);
+    ctx.fillStyle = `hsla(${this.hue},100%,70%,${this.life * 0.8})`;
+    ctx.fill();
+  }
+}
+
+// ═══════════════════════════════════════
+//  动画调度（基于时间）
+// ═══════════════════════════════════════
+// 第一幕 0-4s：文字雨
+// 第二幕 4-9s：文字被吸引汇聚，凝形龙虎
+// 第三幕 9-12s：龙虎成形，对峙
+// 第四幕 12-16s：对冲厮杀，碰撞
+// 第五幕 16-22s：爆裂散开，归于文字
+
+let startTime = 0;
+let started = false;
+let frame = 0;
+
+// Pretext 测量：标题文字「儒」
+const { prepareWithSegments } = Pretext;
+let ruCharLayout = null;
+try {
+  const prepared = prepareWithSegments(ctx, [
+    { text: '儒', font: '120px "Songti SC","SimSun","KaiTi",serif' }
+  ]);
+  ruCharLayout = prepared;
+} catch(e) {}
+
+function getPhase(t) {
+  if (t < 4) return 'rain';
+  if (t < 9) return 'gather';
+  if (t < 12) return 'form';
+  if (t < 16) return 'clash';
+  return 'scatter';
+}
+
+let prevPhase = '';
+let dragonPts = [];
+let tigerPts = [];
+let clashTriggered = false;
+let scatterTriggered = false;
+
+function assignFormTargets(t) {
+  const progress = Math.min(1, (t - 4) / 4);
+  const scale = Math.min(W, H) * 0.3;
+
+  // 龙在左上
+  dragonPts = dragonPath(W * 0.3, H * 0.38, scale, frame);
+  // 虎在右下
+  tigerPts = tigerPath(W * 0.7, H * 0.58, scale, frame);
+
+  const dragonParticles = particles.filter(p => p.side === 'dragon');
+  const tigerParticles = particles.filter(p => p.side === 'tiger');
+
+  // 分配龙粒子到龙身路径
+  dragonParticles.forEach((p, i) => {
+    const pathIdx = i % dragonPts.length;
+    const pt = dragonPts[pathIdx];
+    const offset = (Math.random() - 0.5) * pt.width * 2;
+    const angle = Math.atan2(
+      (dragonPts[Math.min(pathIdx + 1, dragonPts.length - 1)].y - pt.y),
+      (dragonPts[Math.min(pathIdx + 1, dragonPts.length - 1)].x - pt.x)
+    ) + Math.PI / 2;
+    p.formTarget = {
+      x: pt.x + Math.cos(angle) * offset,
+      y: pt.y + Math.sin(angle) * offset,
+    };
+  });
+
+  // 分配虎粒子到虎身路径
+  tigerParticles.forEach((p, i) => {
+    const pathIdx = i % tigerPts.length;
+    const pt = tigerPts[pathIdx];
+    const offset = (Math.random() - 0.5) * pt.width * 2;
+    const angle = Math.atan2(
+      (tigerPts[Math.min(pathIdx + 1, tigerPts.length - 1)].y - pt.y),
+      (tigerPts[Math.min(pathIdx + 1, tigerPts.length - 1)].x - pt.x)
+    ) + Math.PI / 2;
+    p.formTarget = {
+      x: pt.x + Math.cos(angle) * offset,
+      y: pt.y + Math.sin(angle) * offset,
+    };
+  });
+}
+
+function tick() {
+  requestAnimationFrame(tick);
+  frame++;
+
+  if (!started) {
+    ctx.fillStyle = '#080810';
+    ctx.fillRect(0, 0, W, H);
+    return;
+  }
+
+  const t = (performance.now() - startTime) / 1000;
+  const phase = getPhase(t);
+
+  // 状态切换
+  if (phase !== prevPhase) {
+    if (phase === 'rain') {
+      particles.forEach(p => p.setRain());
+    }
+    if (phase === 'gather') {
+      assignFormTargets(t);
+      particles.forEach(p => p.setGather(p.formTarget?.x ?? p.x, p.formTarget?.y ?? p.y));
+    }
+    if (phase === 'form') {
+      particles.forEach(p => p.setForm());
+    }
+    if (phase === 'clash' && !clashTriggered) {
+      clashTriggered = true;
+      // 龙冲向右，虎冲向左
+      particles.forEach(p => {
+        if (p.side === 'dragon') p.setClash(4, -1);
+        else p.setClash(-4, 1);
+      });
+    }
+    if (phase === 'scatter' && !scatterTriggered) {
+      scatterTriggered = true;
+      particles.forEach(p => p.setScatter());
+      // 3秒后变为缓落
+      setTimeout(() => {
+        particles.forEach(p => p.setFall());
+      }, 3000);
+    }
+    prevPhase = phase;
+  }
+
+  // gather 阶段持续更新目标（龙虎身体在动）
+  if (phase === 'gather' || phase === 'form') {
+    assignFormTargets(t);
+    if (phase === 'form') {
+      particles.forEach(p => {
+        if (p.formTarget) {
+          // 微调让形态更紧致
+        }
+      });
+    }
+  }
+
+  // clash 阶段在碰撞中心产生火花
+  if (phase === 'clash') {
+    const clashT = t - 12;
+    if (clashT > 0.5 && clashT < 3 && frame % 2 === 0) {
+      const cx = W * 0.5 + (Math.random() - 0.5) * 100;
+      const cy = H * 0.48 + (Math.random() - 0.5) * 80;
+      for (let i = 0; i < 5; i++) sparks.push(new Spark(cx, cy));
+    }
+  }
+
+  // ── 绘制 ──
+  // 拖尾效果
+  ctx.fillStyle = 'rgba(8,8,16,0.15)';
+  ctx.fillRect(0, 0, W, H);
+
+  // 背景光效
+  if (phase === 'form' || phase === 'clash') {
+    const intensity = phase === 'clash' ? 0.08 : 0.03;
+    // 龙光
+    const dg = ctx.createRadialGradient(W * 0.3, H * 0.38, 20, W * 0.3, H * 0.38, 250);
+    dg.addColorStop(0, `rgba(255,200,50,${intensity})`);
+    dg.addColorStop(1, 'rgba(255,180,30,0)');
+    ctx.fillStyle = dg; ctx.fillRect(0, 0, W, H);
+    // 虎光
+    const tg = ctx.createRadialGradient(W * 0.7, H * 0.58, 20, W * 0.7, H * 0.58, 250);
+    tg.addColorStop(0, `rgba(255,100,30,${intensity})`);
+    tg.addColorStop(1, 'rgba(200,60,20,0)');
+    ctx.fillStyle = tg; ctx.fillRect(0, 0, W, H);
+  }
+
+  // clash 中心大光晕
+  if (phase === 'clash') {
+    const clashT = t - 12;
+    const flashA = clashT < 0.3 ? clashT / 0.3 * 0.3 : Math.max(0, 0.3 - (clashT - 0.3) * 0.05);
+    if (flashA > 0.01) {
+      const fg = ctx.createRadialGradient(W * 0.5, H * 0.48, 5, W * 0.5, H * 0.48, 300);
+      fg.addColorStop(0, `rgba(255,255,200,${flashA})`);
+      fg.addColorStop(.3, `rgba(255,200,100,${flashA * 0.5})`);
+      fg.addColorStop(1, 'rgba(200,100,50,0)');
+      ctx.fillStyle = fg; ctx.fillRect(0, 0, W, H);
+    }
+  }
+
+  // 「儒」字中央（蓄势阶段）
+  if (t > 0.5 && t < 5) {
+    const ruA = t < 1.5 ? (t - 0.5) : Math.max(0, 1 - (t - 3) / 2);
+    if (ruA > 0.01) {
+      ctx.save();
+      ctx.globalAlpha = ruA * 0.6;
+      ctx.font = '120px "Songti SC","SimSun","KaiTi",serif';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillStyle = `rgba(255,215,80,1)`;
+      ctx.fillText('儒', W / 2, H / 2);
+      // 光晕
+      const rg = ctx.createRadialGradient(W/2, H/2, 10, W/2, H/2, 120);
+      rg.addColorStop(0, `rgba(255,200,60,${ruA * 0.15})`);
+      rg.addColorStop(1, 'rgba(255,180,40,0)');
+      ctx.fillStyle = rg;
+      ctx.fillRect(W/2 - 120, H/2 - 120, 240, 240);
+      ctx.restore();
+    }
+  }
+
+  // 龙虎标签（form 阶段）
+  if (phase === 'form') {
+    ctx.save();
+    ctx.globalAlpha = 0.25;
+    ctx.font = '48px "Songti SC","SimSun","KaiTi",serif';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = 'rgba(255,220,100,1)';
+    ctx.fillText('龙', W * 0.3, H * 0.15);
+    ctx.fillStyle = 'rgba(255,140,60,1)';
+    ctx.fillText('虎', W * 0.7, H * 0.85);
+    ctx.restore();
+  }
+
+  // 粒子
+  for (const p of particles) {
+    p.update(1);
+    p.draw();
+  }
+
+  // 火花
+  for (let i = sparks.length - 1; i >= 0; i--) {
+    sparks[i].update();
+    sparks[i].draw();
+    if (sparks[i].life <= 0) sparks.splice(i, 1);
+  }
+
+  // 暗角
+  const vig = ctx.createRadialGradient(W/2, H/2, Math.min(W,H)*.2, W/2, H/2, Math.max(W,H)*.7);
+  vig.addColorStop(0, 'rgba(0,0,0,0)');
+  vig.addColorStop(1, 'rgba(0,0,0,0.4)');
+  ctx.fillStyle = vig;
+  ctx.fillRect(0, 0, W, H);
+
+  // 结尾文字
+  if (t > 20) {
+    const endA = Math.min(0.5, (t - 20) / 3);
+    ctx.save();
+    ctx.globalAlpha = endA;
+    ctx.textAlign = 'center';
+    ctx.font = '24px "Songti SC","SimSun","KaiTi",serif';
+    ctx.fillStyle = 'rgba(200,180,120,1)';
+    ctx.fillText('千万经典文字  凝形而战  化字而归', W / 2, H / 2 - 15);
+    ctx.font = '14px "Songti SC","SimSun",serif';
+    ctx.fillStyle = 'rgba(160,145,100,1)';
+    ctx.globalAlpha = endA * 0.6;
+    ctx.fillText('— 剑来 · 本命字', W / 2, H / 2 + 15);
+    ctx.restore();
+  }
+}
+
+// ═══════════════════════════════════════
+//  启动
+// ═══════════════════════════════════════
+const playBtn = document.getElementById('playBtn');
+
+function start() {
+  playBtn.style.opacity = '0';
+  setTimeout(() => playBtn.style.display = 'none', 1000);
+  started = true;
+  startTime = performance.now();
+  initAudio();
+}
+
+playBtn.addEventListener('click', start, { once: true });
+
+window.addEventListener('resize', () => {
+  W = innerWidth; H = innerHeight;
+  canvas.width = W; canvas.height = H;
+});
+canvas.addEventListener('touchstart', e => e.preventDefault(), {passive:false});
+canvas.addEventListener('touchmove', e => e.preventDefault(), {passive:false});
+
+tick();
+
+// ═══════════════════════════════════════
+//  音效系统
+// ═══════════════════════════════════════
+let audioCtx;
+function initAudio() {
+  audioCtx = new (AudioContext || webkitAudioContext)();
+  const master = audioCtx.createGain();
+  master.gain.value = 0.15;
+  master.connect(audioCtx.destination);
+
+  // 低频蓄势 drone
+  const drone = audioCtx.createOscillator();
+  const dg = audioCtx.createGain();
+  drone.type = 'sawtooth'; drone.frequency.value = 40;
+  dg.gain.setValueAtTime(0, audioCtx.currentTime);
+  dg.gain.linearRampToValueAtTime(0.08, audioCtx.currentTime + 3);
+  dg.gain.linearRampToValueAtTime(0.04, audioCtx.currentTime + 8);
+  dg.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 20);
+  const lp = audioCtx.createBiquadFilter();
+  lp.type = 'lowpass'; lp.frequency.value = 120;
+  drone.connect(lp); lp.connect(dg); dg.connect(master);
+  drone.start(); drone.stop(audioCtx.currentTime + 22);
+
+  // 4秒后：汇聚音（上升 tone）
+  setTimeout(() => {
+    const rise = audioCtx.createOscillator();
+    const rg = audioCtx.createGain();
+    rise.type = 'sine';
+    rise.frequency.setValueAtTime(100, audioCtx.currentTime);
+    rise.frequency.exponentialRampToValueAtTime(400, audioCtx.currentTime + 5);
+    rg.gain.setValueAtTime(0.06, audioCtx.currentTime);
+    rg.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 5);
+    rise.connect(rg); rg.connect(master);
+    rise.start(); rise.stop(audioCtx.currentTime + 5.5);
+  }, 4000);
+
+  // 12秒：碰撞冲击音
+  setTimeout(() => {
+    // 爆裂白噪
+    const bufSz = audioCtx.sampleRate * 0.5;
+    const buf = audioCtx.createBuffer(1, bufSz, audioCtx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < bufSz; i++) d[i] = (Math.random() * 2 - 1) * Math.exp(-i / bufSz * 6);
+    const boom = audioCtx.createBufferSource();
+    boom.buffer = buf;
+    const bg = audioCtx.createGain();
+    bg.gain.value = 0.25;
+    boom.connect(bg); bg.connect(master);
+    boom.start();
+
+    // 低频撞击
+    const impact = audioCtx.createOscillator();
+    const ig = audioCtx.createGain();
+    impact.type = 'sine';
+    impact.frequency.setValueAtTime(80, audioCtx.currentTime);
+    impact.frequency.exponentialRampToValueAtTime(20, audioCtx.currentTime + 0.5);
+    ig.gain.setValueAtTime(0.2, audioCtx.currentTime);
+    ig.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.8);
+    impact.connect(ig); ig.connect(master);
+    impact.start(); impact.stop(audioCtx.currentTime + 1);
+  }, 12000);
+
+  // 16秒：散开后的余韵
+  setTimeout(() => {
+    [220, 330, 440, 554].forEach((f, i) => {
+      const o = audioCtx.createOscillator();
+      const g = audioCtx.createGain();
+      o.type = 'sine'; o.frequency.value = f;
+      g.gain.setValueAtTime(0, audioCtx.currentTime + i * 0.3);
+      g.gain.linearRampToValueAtTime(0.03, audioCtx.currentTime + i * 0.3 + 0.2);
+      g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 4);
+      o.connect(g); g.connect(master);
+      o.start(audioCtx.currentTime + i * 0.3);
+      o.stop(audioCtx.currentTime + 5);
+    });
+  }, 16000);
+}
+</script>
+</body>
+</html>
