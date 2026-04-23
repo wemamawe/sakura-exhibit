@@ -8,26 +8,26 @@
 *{margin:0;padding:0;box-sizing:border-box}
 body{background:#080810;overflow:hidden;touch-action:none}
 canvas{display:block}
-#playBtn{position:fixed;top:0;left:0;width:100%;height:100%;z-index:1000;
+#p{position:fixed;top:0;left:0;width:100%;height:100%;z-index:1000;
   background:rgba(0,0,0,.88);display:flex;align-items:center;justify-content:center;
   cursor:pointer;transition:opacity 1.2s}
-#playBtn .inner{text-align:center;color:#d4c8a0}
-#playBtn .title{font:38px "Songti SC","SimSun","KaiTi",serif;letter-spacing:14px;margin-bottom:14px;
+#p .i{text-align:center;color:#d4c8a0}
+#p .t{font:38px "Songti SC","SimSun","KaiTi",serif;letter-spacing:14px;margin-bottom:14px;
   text-shadow:0 0 40px rgba(255,200,80,.3)}
-#playBtn .sub{font:13px "Songti SC","SimSun",serif;opacity:.4;margin-bottom:30px;letter-spacing:4px}
-#playBtn .circle{width:72px;height:72px;border-radius:50%;
+#p .s{font:13px "Songti SC","SimSun",serif;opacity:.4;margin-bottom:30px;letter-spacing:4px}
+#p .c{width:72px;height:72px;border-radius:50%;
   border:1.5px solid rgba(212,200,160,.3);display:flex;align-items:center;justify-content:center;
   margin:0 auto;transition:all .3s}
-#playBtn .circle:hover{background:rgba(212,200,160,.08)}
-#playBtn .tri{width:0;height:0;border-top:14px solid transparent;border-bottom:14px solid transparent;
+#p .c:hover{background:rgba(212,200,160,.08)}
+#p .r{width:0;height:0;border-top:14px solid transparent;border-bottom:14px solid transparent;
   border-left:22px solid rgba(212,200,160,.6);margin-left:5px}
 </style>
 </head>
 <body>
-<div id="playBtn"><div class="inner">
-  <div class="title">本 命 字</div>
-  <div class="sub">蓄势 · 凝形 · 厮杀 · 落字 · 归无</div>
-  <div class="circle"><div class="tri"></div></div>
+<div id="p"><div class="i">
+  <div class="t">本 命 字</div>
+  <div class="s">蓄势 · 凝形 · 厮杀 · 落字 · 归无</div>
+  <div class="c"><div class="r"></div></div>
 </div></div>
 <canvas id="c"></canvas>
 <script>
@@ -45,11 +45,13 @@ const TXT='学而时习之不亦说乎有朋自远方来不亦乐乎人不知而
 '天将降大任于是人也必先苦其心志劳其筋骨'+
 '富贵不能淫贫贱不能移威武不能屈此之谓大丈夫'+
 '天行健君子以自强不息地势坤君子以厚德载物'+
-'人心惟危道心惟微惟精惟一允执厥中'+
 '穷则独善其身达则兼善天下民为贵社稷次之君为轻';
 const rc=()=>TXT[Math.floor(Math.random()*TXT.length)];
 
-const SZ=[8,10,12,14,16,20];
+// ═══════════════════════════════════════
+//  预渲染文字缓存
+// ═══════════════════════════════════════
+const SZ=[9,11,13,15];
 const ccm=new Map();
 function gCC(ch,sz,hue,lit){
   const k=ch+sz+hue+lit;if(ccm.has(k))return ccm.get(k);
@@ -61,20 +63,105 @@ function gCC(ch,sz,hue,lit){
   x.fillText(ch,s/2,s/2);
   ccm.set(k,cv);return cv;
 }
-for(let i=0;i<TXT.length;i++)SZ.forEach(s=>{gCC(TXT[i],s,42,65);gCC(TXT[i],s,210,60);gCC(TXT[i],s,42,35);});
+for(let i=0;i<TXT.length;i++)SZ.forEach(s=>{gCC(TXT[i],s,42,60);gCC(TXT[i],s,210,55);gCC(TXT[i],s,42,35);});
 
 // ═══════════════════════════════════════
-//  时间轴
-//  0-5    蓄势：文字暴雨
-//  5-9    凝形：汇聚双剑 + 镜头推拉
-//  9-19   厮杀+落字：物理驱动连续对攻
-//  19+    归无：碎裂散尽
+//  预渲染剑（离屏canvas）— 性能关键
+//  只渲染一次，每帧用 drawImage 贴图
 // ═══════════════════════════════════════
+function renderSwordCanvas(hue){
+  const len=400; // 基准长度，运行时缩放
+  const bw=len*.07;
+  const cv=document.createElement('canvas');
+  // 剑占据的范围：宽 bw*6, 高 len*1.2
+  const cw=Math.ceil(bw*8),ch=Math.ceil(len*1.25);
+  cv.width=cw;cv.height=ch;
+  const x=cv.getContext('2d');
+  const ox=cw/2,oy=ch-len*.18; // 剑柄底部位置
+
+  // 光晕
+  x.globalAlpha=.15;
+  const g=x.createLinearGradient(ox,oy-len*1.05,ox,oy+len*.1);
+  g.addColorStop(0,'hsla('+hue+',90%,80%,1)');
+  g.addColorStop(.4,'hsla('+hue+',70%,60%,.6)');
+  g.addColorStop(1,'hsla('+hue+',50%,40%,0)');
+  x.fillStyle=g;
+  x.beginPath();
+  x.moveTo(ox,oy-len*1.05);
+  x.lineTo(ox-bw*2.5,oy-len*.35);
+  x.lineTo(ox-bw*2.5,oy);x.lineTo(ox+bw*2.5,oy);x.lineTo(ox+bw*2.5,oy-len*.35);
+  x.closePath();x.fill();
+
+  // 轮廓
+  x.globalAlpha=.1;
+  x.strokeStyle='hsla('+hue+',70%,75%,1)';x.lineWidth=1.2;
+  x.beginPath();
+  x.moveTo(ox,oy-len);x.lineTo(ox-bw*.3,oy-len*.92);
+  x.lineTo(ox-bw,oy-len*.12);x.lineTo(ox-bw*1.8,oy+2);x.lineTo(ox-bw*1.8,oy+10);
+  x.lineTo(ox-bw*.45,oy+10);x.lineTo(ox-bw*.38,oy+len*.18);
+  x.lineTo(ox+bw*.38,oy+len*.18);x.lineTo(ox+bw*.45,oy+10);
+  x.lineTo(ox+bw*1.8,oy+10);x.lineTo(ox+bw*1.8,oy+2);
+  x.lineTo(ox+bw,oy-len*.12);x.lineTo(ox+bw*.3,oy-len*.92);
+  x.closePath();x.stroke();
+  // 剑脊
+  x.globalAlpha=.05;x.beginPath();x.moveTo(ox,oy-len);x.lineTo(ox,oy);
+  x.strokeStyle='hsla('+hue+',60%,70%,1)';x.lineWidth=.6;x.stroke();
+
+  // 文字填充
+  const step=9;
+  const rows=Math.floor(len/step);
+  for(let i=0;i<rows;i++){
+    const ct=i/rows;
+    const cy=oy-len*ct;
+    let lw;
+    if(ct>.95)lw=bw*.2;
+    else if(ct>.12)lw=bw*(.3+.7*Math.min(1,(ct-.12)/.15));
+    else lw=bw*1.5;
+    const cols=Math.max(1,Math.floor(lw*2/step));
+    for(let j=0;j<cols;j++){
+      const cx2=ox-lw+(j+.5)*(lw*2)/cols;
+      const ch2=rc();
+      const sz=SZ[Math.floor(Math.random()*SZ.length)];
+      const lit=45+Math.floor(ct*25);
+      x.globalAlpha=.35+ct*.45;
+      x.font=sz+'px "Songti SC","SimSun","KaiTi",serif';
+      x.textAlign='center';x.textBaseline='middle';
+      x.fillStyle='hsl('+hue+',80%,'+lit+'%)';
+      x.fillText(ch2,cx2,cy);
+    }
+  }
+  // 护手
+  x.globalAlpha=.45;
+  for(let j=-3;j<=3;j++){
+    x.font='12px "Songti SC","SimSun","KaiTi",serif';
+    x.textAlign='center';x.textBaseline='middle';
+    x.fillStyle='hsl('+hue+',80%,70%)';
+    x.fillText(rc(),ox+j*10,oy+4);
+  }
+
+  return {cv,ox,oy,len};
+}
+
+const swordA=renderSwordCanvas(42);
+const swordB=renderSwordCanvas(210);
+
+// 画剑：一次 drawImage
+function drawSword(sword,cx,cy,angle,scale,alpha){
+  if(alpha<.01)return;
+  ctx.save();
+  ctx.globalAlpha=alpha;
+  ctx.translate(cx,cy);
+  ctx.rotate(angle);
+  const sc=scale*baseSwordLen()/sword.len;
+  ctx.scale(sc,sc);
+  ctx.drawImage(sword.cv,-sword.ox,-sword.oy);
+  ctx.restore();
+}
 
 // ═══════════════════════════════════════
-//  文字雨粒子
+//  文字雨粒子（蓄势+凝形）
 // ═══════════════════════════════════════
-const N=1500;
+const N=1200;
 const px=new Float32Array(N),py=new Float32Array(N);
 const pvx=new Float32Array(N),pvy=new Float32Array(N);
 const pa=new Float32Array(N);
@@ -85,211 +172,96 @@ const pcc=new Array(N);
 for(let i=0;i<N;i++){
   px[i]=Math.random()*W;py[i]=-Math.random()*H*3;
   pvx[i]=(Math.random()-.5)*.4;pvy[i]=2+Math.random()*4;
-  pa[i]=.08+Math.random()*.35;pst[i]=0;
+  pa[i]=.05+Math.random()*.3;pst[i]=0;
   psd[i]=i<N/2?0:1;
   const hue=psd[i]===0?42:210;
-  pcc[i]=gCC(rc(),SZ[Math.floor(Math.random()*SZ.length)],hue,50+Math.floor(Math.random()*25));
+  pcc[i]=gCC(rc(),SZ[Math.floor(Math.random()*SZ.length)],hue,50+Math.floor(Math.random()*20));
 }
 
 // ═══════════════════════════════════════
-//  剑绘制
+//  物理双剑
 // ═══════════════════════════════════════
-function baseSwordLen(){return Math.min(W,H)*.4;}
+function baseSwordLen(){return Math.min(W,H)*.38;}
 
-function getZoom(t){
-  if(t<5)return 1;
-  if(t<6)return 1+2*((t-5));
-  if(t<8)return 3;
-  if(t<10)return 3-2*((t-8)/2);
-  return 1;
-}
-
-function drawTextSword(cx,cy,angle,len,hue,alpha,t){
-  ctx.save();
-  ctx.translate(cx,cy);ctx.rotate(angle);
-  const bw=len*.07,bl=len;
-
-  // 光晕
-  ctx.globalAlpha=alpha*.12;
-  const g1=ctx.createLinearGradient(0,-bl*1.05,0,bl*.15);
-  g1.addColorStop(0,'hsla('+hue+',90%,80%,1)');
-  g1.addColorStop(.4,'hsla('+hue+',70%,60%,.6)');
-  g1.addColorStop(1,'hsla('+hue+',50%,40%,0)');
-  ctx.fillStyle=g1;
-  ctx.beginPath();
-  ctx.moveTo(0,-bl*1.05);ctx.lineTo(-bw*2.5,-bl*.35);
-  ctx.lineTo(-bw*2.5,0);ctx.lineTo(bw*2.5,0);ctx.lineTo(bw*2.5,-bl*.35);
-  ctx.closePath();ctx.fill();
-
-  // 轮廓
-  ctx.globalAlpha=alpha*.08;
-  ctx.strokeStyle='hsla('+hue+',70%,75%,1)';ctx.lineWidth=1.2;
-  ctx.beginPath();
-  ctx.moveTo(0,-bl);ctx.lineTo(-bw*.3,-bl*.92);
-  ctx.lineTo(-bw,-bl*.12);ctx.lineTo(-bw*1.8,2);ctx.lineTo(-bw*1.8,10);
-  ctx.lineTo(-bw*.45,10);ctx.lineTo(-bw*.38,bl*.18);
-  ctx.lineTo(bw*.38,bl*.18);ctx.lineTo(bw*.45,10);
-  ctx.lineTo(bw*1.8,10);ctx.lineTo(bw*1.8,2);
-  ctx.lineTo(bw,-bl*.12);ctx.lineTo(bw*.3,-bl*.92);
-  ctx.closePath();ctx.stroke();
-  // 剑脊
-  ctx.globalAlpha=alpha*.04;ctx.beginPath();
-  ctx.moveTo(0,-bl);ctx.lineTo(0,0);
-  ctx.strokeStyle='hsla('+hue+',60%,70%,1)';ctx.lineWidth=.6;ctx.stroke();
-
-  // 文字
-  const step=Math.max(6,10);
-  const rows=Math.floor(bl/step);
-  for(let i=0;i<rows;i++){
-    const ct=i/rows;
-    const cy2=-bl*ct;
-    let lw;
-    if(ct>.95)lw=bw*.2;
-    else if(ct>.12)lw=bw*(.3+.7*Math.min(1,(ct-.12)/.15));
-    else lw=bw*1.5;
-    const cols=Math.max(1,Math.floor(lw*2/step));
-    for(let j=0;j<cols;j++){
-      const cx2=-lw+(j+.5)*(lw*2)/cols;
-      const sz=SZ[Math.floor(Math.random()*SZ.length)];
-      const shimmer=Math.sin(t*3.5+i*.7+j*1.3)*.08;
-      ctx.globalAlpha=alpha*(.3+ct*.45+shimmer);
-      const c=gCC(rc(),sz,hue,45+Math.floor(ct*28));
-      ctx.drawImage(c,cx2-c.width/2,cy2-c.height/2);
-    }
-  }
-  // 护手
-  ctx.globalAlpha=alpha*.45;
-  for(let j=-3;j<=3;j++){
-    const c=gCC(rc(),12,hue,70);
-    ctx.drawImage(c,j*10-c.width/2,4-c.height/2);
-  }
-  ctx.restore();
-}
-
-function swordPoints(cx,cy,angle,len,count){
-  const pts=[],bw=len*.07;
-  const cos=Math.cos(angle),sin=Math.sin(angle);
-  for(let i=0;i<count;i++){
-    const t=Math.random(),yL=-len*(1-t);
-    let w;if(t>.95)w=bw*.2;else if(t>.12)w=bw;else w=bw*1.5;
-    const xL=(Math.random()-.5)*w*2;
-    pts.push({x:cx+xL*cos-yL*sin,y:cy+xL*sin+yL*cos});
-  }
-  return pts;
-}
-
-// ═══════════════════════════════════════
-//  物理驱动双剑 — 始终在画面中央缠斗
-//  两剑绕中心旋转、互相冲击、碰撞弹开
-//  保证不飞出屏幕
-// ═══════════════════════════════════════
-const sA={x:0,y:0,vx:0,vy:0,angle:0,va:0};
-const sB={x:0,y:0,vx:0,vy:0,angle:0,va:0};
-let lastClashT=-9;
-let clashFlash=0;
-let clashFx=0,clashFy=0;
+const sAs={x:0,y:0,vx:0,vy:0,angle:0};
+const sBs={x:0,y:0,vx:0,vy:0,angle:0};
+let lastClashT=-9,clashFlash=0,clashFx=0,clashFy=0;
 
 function initSwords(){
-  sA.x=W*.38;sA.y=H*.45;sA.angle=-.78;sA.vx=0;sA.vy=0;sA.va=0;
-  sB.x=W*.62;sB.y=H*.45;sB.angle=Math.PI+.78;sB.vx=0;sB.vy=0;sB.va=0;
+  sAs.x=W*.38;sAs.y=H*.45;sAs.angle=-.78;sAs.vx=0;sAs.vy=0;
+  sBs.x=W*.62;sBs.y=H*.45;sBs.angle=Math.PI+.78;sBs.vx=0;sBs.vy=0;
 }
 
 function updateSwords(t,dt){
-  // 战斗节奏：用正弦组合驱动两剑围绕中心运动
   const cx=W*.5,cy=H*.43;
-  const phase=t-9; // 从厮杀开始算
-  const intensity=Math.min(1,phase/3); // 0→1 越来越激烈
-  const radius=Math.min(W,H)*(.08+.06*Math.sin(phase*1.3));
+  const phase=t-9;
+  const intensity=Math.min(1,phase/4);
+  // 旋转半径：近距离缠斗
+  const r=Math.min(W,H)*(.06+.04*Math.sin(phase*1.1));
 
-  // 剑A目标位置：绕中心旋转+摆动
-  const aAngle=phase*1.8+Math.sin(phase*2.5)*.5;
-  const aTx=cx+Math.cos(aAngle)*radius;
-  const aTy=cy+Math.sin(aAngle)*radius*.7;
+  // 双剑围绕中心快速旋转
+  const spd=1.5+intensity*1.5; // 越来越快
+  const aA=phase*spd+Math.sin(phase*2.5)*.4;
+  const aTx=cx+Math.cos(aA)*r;
+  const aTy=cy+Math.sin(aA)*r*.7;
+  const bA=aA+Math.PI+Math.sin(phase*3)*.25;
+  const bTx=cx+Math.cos(bA)*r;
+  const bTy=cy+Math.sin(bA)*r*.7;
 
-  // 剑B目标：对面
-  const bAngle=aAngle+Math.PI+Math.sin(phase*3.2)*.3;
-  const bTx=cx+Math.cos(bAngle)*radius;
-  const bTy=cy+Math.sin(bAngle)*radius*.7;
+  const k=4+intensity*5,damp=.84;
+  sAs.vx+=(aTx-sAs.x)*k*dt;sAs.vy+=(aTy-sAs.y)*k*dt;
+  sBs.vx+=(bTx-sBs.x)*k*dt;sBs.vy+=(bTy-sBs.y)*k*dt;
+  sAs.vx*=damp;sAs.vy*=damp;sBs.vx*=damp;sBs.vy*=damp;
+  sAs.x+=sAs.vx*dt*60;sAs.y+=sAs.vy*dt*60;
+  sBs.x+=sBs.vx*dt*60;sBs.y+=sBs.vy*dt*60;
 
-  // 弹簧力追目标
-  const k=3+intensity*4;
-  const damp=.85;
-  sA.vx+=(aTx-sA.x)*k*dt;sA.vy+=(aTy-sA.y)*k*dt;
-  sB.vx+=(bTx-sB.x)*k*dt;sB.vy+=(bTy-sB.y)*k*dt;
-  sA.vx*=damp;sA.vy*=damp;
-  sB.vx*=damp;sB.vy*=damp;
-  sA.x+=sA.vx*dt*60;sA.y+=sA.vy*dt*60;
-  sB.x+=sB.vx*dt*60;sB.y+=sB.vy*dt*60;
+  // 朝向对方
+  sAs.angle=Math.atan2(sBs.y-sAs.y,sBs.x-sAs.x)-Math.PI/2+Math.sin(phase*4)*.1;
+  sBs.angle=Math.atan2(sAs.y-sBs.y,sAs.x-sBs.x)-Math.PI/2+Math.sin(phase*4+1)*.1;
 
-  // 剑角度：指向对方
-  sA.angle=Math.atan2(sB.y-sA.y,sB.x-sA.x)-Math.PI/2;
-  sB.angle=Math.atan2(sA.y-sB.y,sA.x-sB.x)-Math.PI/2;
-  // 加点摆动
-  sA.angle+=Math.sin(phase*4)*.15;
-  sB.angle+=Math.sin(phase*4+1)*.15;
-
-  // 碰撞检测：两剑中心距离
-  const dx=sA.x-sB.x,dy=sA.y-sB.y;
+  // 碰撞
+  const dx=sAs.x-sBs.x,dy=sAs.y-sBs.y;
   const dist=Math.sqrt(dx*dx+dy*dy);
-  const clashDist=baseSwordLen()*.15; // 接近时触发
-
-  if(dist<clashDist&&(t-lastClashT)>.35){
-    // 碰撞！
-    lastClashT=t;
-    clashFlash=1;
-    clashFx=(sA.x+sB.x)/2;
-    clashFy=(sA.y+sB.y)/2;
-
-    // 弹开力
-    const nx=dx/(dist+.1)*4,ny=dy/(dist+.1)*4;
-    sA.vx+=nx;sA.vy+=ny;
-    sB.vx-=nx;sB.vy-=ny;
-
-    // 落字数量随时间增加
-    const n=30+Math.floor(intensity*40);
-    spawnFall(clashFx,clashFy,n,1+intensity*.5);
-    addSpark(clashFx,clashFy,10+Math.floor(intensity*15));
-
-    // 音效
+  const cd=baseSwordLen()*.12;
+  if(dist<cd&&(t-lastClashT)>.3){
+    lastClashT=t;clashFlash=1;
+    clashFx=(sAs.x+sBs.x)/2;clashFy=(sAs.y+sBs.y)/2;
+    const nx=dx/(dist+.1)*3,ny=dy/(dist+.1)*3;
+    sAs.vx+=nx;sAs.vy+=ny;sBs.vx-=nx;sBs.vy-=ny;
+    spawnFall(clashFx,clashFy,25+Math.floor(intensity*30),1+intensity*.4);
+    addSpark(clashFx,clashFy,8+Math.floor(intensity*10));
     playClash(intensity);
   }
 
-  // 屏幕边界约束（软边界）
-  const margin=W*.15;
-  [sA,sB].forEach(s=>{
-    if(s.x<margin)s.vx+=(margin-s.x)*.1;
-    if(s.x>W-margin)s.vx+=(W-margin-s.x)*.1;
-    if(s.y<margin*.7)s.vy+=(margin*.7-s.y)*.1;
-    if(s.y>H-margin*.7)s.vy+=(H-margin*.7-s.y)*.1;
+  // 软边界
+  const m=W*.12;
+  [sAs,sBs].forEach(s=>{
+    if(s.x<m)s.vx+=(m-s.x)*.15;if(s.x>W-m)s.vx+=(W-m-s.x)*.15;
+    if(s.y<m*.6)s.vy+=(m*.6-s.y)*.15;if(s.y>H-m*.6)s.vy+=(H-m*.6-s.y)*.15;
   });
 
-  // 闪光衰减
-  if(clashFlash>0)clashFlash*=.92;
+  if(clashFlash>0)clashFlash*=.9;
 }
 
 // ═══════════════════════════════════════
 //  落字粒子
 // ═══════════════════════════════════════
-const FM=3000;
+const FM=2000;
 const fx=new Float32Array(FM),fy=new Float32Array(FM);
 const fvx=new Float32Array(FM),fvy=new Float32Array(FM);
 const fal=new Float32Array(FM);
-const frt=new Float32Array(FM),frtv=new Float32Array(FM),fph=new Float32Array(FM);
+const frt=new Float32Array(FM),fph=new Float32Array(FM);
 const fcc=new Array(FM);
 let fc=0;
 
 function spawnFall(cx,cy,n,str){
   for(let i=0;i<n&&fc<FM;i++){
-    const a=Math.random()*Math.PI*2,s=(2+Math.random()*7)*str;
-    fx[fc]=cx+(Math.random()-.5)*20;
-    fy[fc]=cy+(Math.random()-.5)*20;
-    fvx[fc]=Math.cos(a)*s;fvy[fc]=Math.sin(a)*s-2;
-    fal[fc]=.55+Math.random()*.35;
-    frt[fc]=Math.random()*Math.PI*2;
-    frtv[fc]=(Math.random()-.5)*.05;
-    fph[fc]=Math.random()*Math.PI*2;
-    const hue=Math.random()<.5?42:210;
-    fcc[fc]=gCC(rc(),SZ[Math.floor(Math.random()*SZ.length)],hue,50+Math.floor(Math.random()*25));
+    const a=Math.random()*Math.PI*2,s=(1.5+Math.random()*5)*str;
+    fx[fc]=cx+(Math.random()-.5)*15;fy[fc]=cy+(Math.random()-.5)*15;
+    fvx[fc]=Math.cos(a)*s;fvy[fc]=Math.sin(a)*s-1.5;
+    fal[fc]=.45+Math.random()*.35;
+    frt[fc]=Math.random()*Math.PI*2;fph[fc]=Math.random()*Math.PI*2;
+    fcc[fc]=gCC(rc(),SZ[Math.floor(Math.random()*SZ.length)],Math.random()<.5?42:210,50+Math.floor(Math.random()*20));
     fc++;
   }
 }
@@ -297,93 +269,66 @@ function spawnFall(cx,cy,n,str){
 function updateDrawFall(){
   let alive=0;
   for(let i=0;i<fc;i++){
-    fvx[i]*=.988;fvy[i]+=.03;fvy[i]*=.998;
-    fx[i]+=fvx[i]+Math.sin(fph[i])*.25;fy[i]+=fvy[i];
-    frt[i]+=frtv[i];frtv[i]*=.999;fph[i]+=.018;
-    fal[i]-=.0012;
-    if(fal[i]<.02||fy[i]>H+60)continue;
+    fvx[i]*=.99;fvy[i]+=.025;
+    fx[i]+=fvx[i]+Math.sin(fph[i])*.2;fy[i]+=fvy[i];
+    frt[i]+=.005;fph[i]+=.015;
+    fal[i]-=.001;
+    if(fal[i]<.015||fy[i]>H+40)continue;
     const c=fcc[i],hs=c.width/2;
     ctx.globalAlpha=fal[i];
-    ctx.save();ctx.translate(fx[i],fy[i]);ctx.rotate(frt[i]);
-    ctx.drawImage(c,-hs,-hs);ctx.restore();
+    ctx.drawImage(c,fx[i]-hs,fy[i]-hs); // 省掉 rotate 的 save/restore
     if(alive!==i){fx[alive]=fx[i];fy[alive]=fy[i];fvx[alive]=fvx[i];fvy[alive]=fvy[i];
-      fal[alive]=fal[i];frt[alive]=frt[i];frtv[alive]=frtv[i];fph[alive]=fph[i];fcc[alive]=fcc[i];}
+      fal[alive]=fal[i];frt[alive]=frt[i];fph[alive]=fph[i];fcc[alive]=fcc[i];}
     alive++;
   }
   fc=alive;ctx.globalAlpha=1;
 }
 
 // ═══════════════════════════════════════
-//  火花
+//  火花（精简）
 // ═══════════════════════════════════════
-const SM=300;
+const SM=150;
 const skx=new Float32Array(SM),sky=new Float32Array(SM);
 const skvx=new Float32Array(SM),skvy=new Float32Array(SM);
-const skl=new Float32Array(SM),skr=new Float32Array(SM),skh=new Uint16Array(SM);
+const skl=new Float32Array(SM),skr=new Float32Array(SM);
 let skc=0;
 function addSpark(cx,cy,n){
   for(let i=0;i<n&&skc<SM;i++){
-    const a=Math.random()*Math.PI*2,s=5+Math.random()*14;
-    skx[skc]=cx;sky[skc]=cy;
-    skvx[skc]=Math.cos(a)*s;skvy[skc]=Math.sin(a)*s;
-    skl[skc]=1;skr[skc]=1+Math.random()*2.5;
-    skh[skc]=Math.random()<.5?42:210;
-    skc++;
+    const a=Math.random()*Math.PI*2,s=4+Math.random()*12;
+    skx[skc]=cx;sky[skc]=cy;skvx[skc]=Math.cos(a)*s;skvy[skc]=Math.sin(a)*s;
+    skl[skc]=1;skr[skc]=1+Math.random()*2;skc++;
   }
 }
 function drawSparks(){
   let alive=0;
   for(let i=0;i<skc;i++){
-    skx[i]+=skvx[i];sky[i]+=skvy[i];
-    skvx[i]*=.93;skvy[i]*=.93;skvy[i]+=.07;
-    skl[i]-=.02;
+    skx[i]+=skvx[i];sky[i]+=skvy[i];skvx[i]*=.92;skvy[i]*=.92;skvy[i]+=.08;
+    skl[i]-=.025;
     if(skl[i]<=0)continue;
-    ctx.beginPath();ctx.arc(skx[i],sky[i],skr[i]*skl[i],0,Math.PI*2);
-    ctx.fillStyle='hsla('+skh[i]+',100%,75%,'+skl[i]*.8+')';ctx.fill();
-    ctx.beginPath();ctx.moveTo(skx[i],sky[i]);
-    ctx.lineTo(skx[i]-skvx[i]*2,sky[i]-skvy[i]*2);
-    ctx.strokeStyle='hsla('+skh[i]+',90%,60%,'+skl[i]*.3+')';
-    ctx.lineWidth=skr[i]*skl[i]*.5;ctx.stroke();
+    ctx.globalAlpha=skl[i]*.8;
+    ctx.fillStyle='#ffd060';
+    ctx.fillRect(skx[i]-skr[i]*skl[i],sky[i]-skr[i]*skl[i],skr[i]*skl[i]*2,skr[i]*skl[i]*2);
     if(alive!==i){skx[alive]=skx[i];sky[alive]=sky[i];skvx[alive]=skvx[i];skvy[alive]=skvy[i];
-      skl[alive]=skl[i];skr[alive]=skr[i];skh[alive]=skh[i];}
+      skl[alive]=skl[i];skr[alive]=skr[i];}
     alive++;
   }
-  skc=alive;
-}
-
-// ═══════════════════════════════════════
-//  残影
-// ═══════════════════════════════════════
-const TL=15;
-const tA=[],tB=[];
-for(let i=0;i<TL;i++){tA.push({x:-99,y:-99});tB.push({x:-99,y:-99});}
-function pushT(tr,x,y){tr.pop();tr.unshift({x,y});}
-function drawTrail(tr,hue){
-  for(let i=1;i<tr.length;i++){
-    if(tr[i].x<-50)continue;
-    ctx.globalAlpha=(1-i/tr.length)*.12;
-    ctx.strokeStyle='hsla('+hue+',70%,65%,1)';
-    ctx.lineWidth=2.5-i*.15;ctx.lineCap='round';
-    ctx.beginPath();ctx.moveTo(tr[i-1].x,tr[i-1].y);ctx.lineTo(tr[i].x,tr[i].y);ctx.stroke();
-  }
-  ctx.globalAlpha=1;
+  skc=alive;ctx.globalAlpha=1;
 }
 
 // ═══════════════════════════════════════
 //  背景微雨
 // ═══════════════════════════════════════
-const BN=100;
-const bx=new Float32Array(BN),by=new Float32Array(BN),bvy2=new Float32Array(BN),bal=new Float32Array(BN);
+const BN=80;
+const bx=new Float32Array(BN),by2=new Float32Array(BN),bvy=new Float32Array(BN);
 const bcc=new Array(BN);
 for(let i=0;i<BN;i++){
-  bx[i]=Math.random()*W;by[i]=Math.random()*H;
-  bvy2[i]=.2+Math.random()*.5;bal[i]=.03+Math.random()*.06;
-  bcc[i]=gCC(rc(),SZ[Math.floor(Math.random()*3)],42,35);
+  bx[i]=Math.random()*W;by2[i]=Math.random()*H;bvy[i]=.2+Math.random()*.5;
+  bcc[i]=gCC(rc(),SZ[Math.floor(Math.random()*2)],42,30);
 }
 function drawBg(){
   for(let i=0;i<BN;i++){
-    by[i]+=bvy2[i];if(by[i]>H+20){by[i]=-20;bx[i]=Math.random()*W;}
-    ctx.globalAlpha=bal[i];ctx.drawImage(bcc[i],bx[i],by[i]);
+    by2[i]+=bvy[i];if(by2[i]>H+20){by2[i]=-20;bx[i]=Math.random()*W;}
+    ctx.globalAlpha=.04;ctx.drawImage(bcc[i],bx[i],by2[i]);
   }
   ctx.globalAlpha=1;
 }
@@ -392,6 +337,16 @@ function drawBg(){
 //  凝形目标
 // ═══════════════════════════════════════
 let gatherDone=false;
+function swordPoints(cx,cy,angle,len,count){
+  const pts=[],bw=len*.07,cos=Math.cos(angle),sin=Math.sin(angle);
+  for(let i=0;i<count;i++){
+    const t=Math.random(),yL=-len*(1-t);
+    let w;if(t>.95)w=bw*.2;else if(t>.12)w=bw;else w=bw*1.5;
+    const xL=(Math.random()-.5)*w*2;
+    pts.push({x:cx+xL*cos-yL*sin,y:cy+xL*sin+yL*cos});
+  }
+  return pts;
+}
 function assignGatherTargets(){
   const sl=baseSwordLen();
   const ptsA=swordPoints(W*.38,H*.45,-.78,sl,N/2);
@@ -404,92 +359,102 @@ function assignGatherTargets(){
 }
 
 // ═══════════════════════════════════════
+//  镜头
+// ═══════════════════════════════════════
+function getZoom(t){
+  if(t<5)return 1;
+  if(t<6)return 1+2*(t-5);
+  if(t<8)return 3;
+  if(t<10)return 3-2*((t-8)/2);
+  return 1;
+}
+
+// ═══════════════════════════════════════
 //  主循环
 // ═══════════════════════════════════════
 let started=false,startTime=0,frame=0,lastT=0;
-let finalBurst=false;
-let swordsInited=false;
+let finalBurst=false,swordsInited=false;
 
 function tick(){
   requestAnimationFrame(tick);
   frame++;
   if(!started){ctx.fillStyle='#080810';ctx.fillRect(0,0,W,H);return;}
   const t=(performance.now()-startTime)/1000;
-  const dt=Math.min(.05,t-lastT);lastT=t;
+  const dt=Math.min(.033,t-lastT||.016);lastT=t;
 
   if(t>=4.8&&!gatherDone){gatherDone=true;assignGatherTargets();}
-  if(t>=9&&!swordsInited){swordsInited=true;initSwords();}
+  if(t>=8.5&&!swordsInited){swordsInited=true;initSwords();}
 
   ctx.fillStyle='#080810';ctx.fillRect(0,0,W,H);
   drawBg();
 
   const zoom=getZoom(t);
+  const zoomActive=zoom>1.01;
+  const ccx=W/2,ccy=H*.45;
 
   // ─── 蓄势 0-5s ───
-  if(t<5){
+  if(t<5.5){
+    const fadeOut=t>5?Math.max(0,1-(t-5)/.5):1;
     for(let i=0;i<N;i++){
+      if(pst[i]===1)continue;
       px[i]+=pvx[i];py[i]+=pvy[i];
-      if(pa[i]<.5)pa[i]+=.003;
+      if(pa[i]<.45)pa[i]+=.003;
       if(py[i]>H+20){py[i]=-20-Math.random()*50;px[i]=Math.random()*W;}
-      if(pa[i]>.02){ctx.globalAlpha=pa[i];ctx.drawImage(pcc[i],px[i]-pcc[i].width/2,py[i]-pcc[i].height/2);}
+      ctx.globalAlpha=pa[i]*fadeOut;
+      ctx.drawImage(pcc[i],px[i]-pcc[i].width/2,py[i]-pcc[i].height/2);
     }
     ctx.globalAlpha=1;
   }
 
   // ─── 凝形 5-9s ───
-  if(t>=5&&t<9){
-    const ccx=W/2,ccy=H*.45;
-    ctx.save();ctx.translate(ccx,ccy);ctx.scale(zoom,zoom);ctx.translate(-ccx,-ccy);
+  if(t>=5&&t<9.5){
+    if(zoomActive){ctx.save();ctx.translate(ccx,ccy);ctx.scale(zoom,zoom);ctx.translate(-ccx,-ccy);}
+    const fadeIn=Math.min(1,(t-5)/.5);
     for(let i=0;i<N;i++){
-      if(pst[i]===0)pst[i]=1;
+      if(pst[i]===0&&t>=5)pst[i]=1;
+      if(pst[i]!==1)continue;
       const dx=ptx[i]-px[i],dy=pty[i]-py[i];
       const gp=Math.min(t-5,4)/4;
       const f=Math.min(.04+gp*.06,500/(dx*dx+dy*dy+40));
       pvx[i]+=dx*f;pvy[i]+=dy*f;pvx[i]*=.89;pvy[i]*=.89;
       px[i]+=pvx[i];py[i]+=pvy[i];
-      if(pa[i]<.85)pa[i]+=.005;
-      ctx.globalAlpha=pa[i];ctx.drawImage(pcc[i],px[i]-pcc[i].width/2,py[i]-pcc[i].height/2);
+      if(pa[i]<.8)pa[i]+=.005;
+      ctx.globalAlpha=pa[i]*fadeIn;
+      ctx.drawImage(pcc[i],px[i]-pcc[i].width/2,py[i]-pcc[i].height/2);
     }
     ctx.globalAlpha=1;
+    // 剑轮廓渐显
     if(t>7){
-      const sa=(t-7)/2;
-      const sl=baseSwordLen();
-      drawTextSword(W*.38,H*.45,-.78,sl,42,sa*.4,t);
-      drawTextSword(W*.62,H*.45,Math.PI+.78,sl,210,sa*.4,t);
+      const sa=Math.min(1,(t-7)/2);
+      drawSword(swordA,W*.38,H*.45,-.78,1,sa*.5);
+      drawSword(swordB,W*.62,H*.45,Math.PI+.78,1,sa*.5);
     }
-    ctx.restore();
+    if(zoomActive)ctx.restore();
   }
 
-  // ─── 厮杀+落字 9-19s ───
-  if(t>=9&&t<22){
-    // 物理更新
-    if(t<19.5) updateSwords(t,dt);
+  // ─── 厮杀 9-20s ───
+  // 双剑始终绘制直到归无淡出完
+  if(t>=8.5){
+    if(t<19.5)updateSwords(t,dt);
 
-    const sl=baseSwordLen();
-    let sAlpha=1;
-    if(t<10)sAlpha=t-9;
-    if(t>19)sAlpha=Math.max(0,1-(t-19)/1.5);
+    let sAlpha;
+    if(t<9.5)sAlpha=Math.min(1,(t-8.5)); // 淡入
+    else if(t<19)sAlpha=1; // 全亮
+    else if(t<21)sAlpha=Math.max(0,1-(t-19)/2); // 淡出
+    else sAlpha=0;
 
     if(sAlpha>.01){
-      // zoom过渡
-      if(zoom>1.01){
-        const ccx=W/2,ccy=H*.45;
-        ctx.save();ctx.translate(ccx,ccy);ctx.scale(zoom,zoom);ctx.translate(-ccx,-ccy);
-      }
-
-      pushT(tA,sA.x,sA.y);pushT(tB,sB.x,sB.y);
-      drawTrail(tA,42);drawTrail(tB,210);
-      drawTextSword(sA.x,sA.y,sA.angle,sl,42,sAlpha,t);
-      drawTextSword(sB.x,sB.y,sB.angle,sl,210,sAlpha,t);
-
-      if(zoom>1.01)ctx.restore();
+      if(zoomActive){ctx.save();ctx.translate(ccx,ccy);ctx.scale(zoom,zoom);ctx.translate(-ccx,-ccy);}
+      drawSword(swordA,sAs.x,sAs.y,sAs.angle,1,sAlpha);
+      drawSword(swordB,sBs.x,sBs.y,sBs.angle,1,sAlpha);
+      if(zoomActive)ctx.restore();
     }
 
     // 碰撞闪光
     if(clashFlash>.05){
-      const g=ctx.createRadialGradient(clashFx,clashFy,3,clashFx,clashFy,250);
-      g.addColorStop(0,'rgba(255,255,220,'+clashFlash*.4+')');
-      g.addColorStop(.3,'rgba(255,200,120,'+clashFlash*.15+')');
+      const g=ctx.createRadialGradient(clashFx,clashFy,3,clashFx,clashFy,200);
+      g.addColorStop(0,'rgba(255,255,220,'+clashFlash*.35+')');
+      g.addColorStop(.3,'rgba(255,200,120,'+clashFlash*.12+')');
       g.addColorStop(1,'rgba(200,150,80,0)');
       ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
     }
@@ -498,8 +463,8 @@ function tick(){
   // ─── 归无 ───
   if(t>19.5&&!finalBurst){
     finalBurst=true;
-    spawnFall(W*.5,H*.43,300,1.8);
-    addSpark(W*.5,H*.43,60);
+    spawnFall(W*.5,H*.43,200,1.6);
+    addSpark(W*.5,H*.43,40);
     playBurst();
   }
 
@@ -509,23 +474,25 @@ function tick(){
   // 「儒」字
   if(t>.5&&t<5.5){
     const ra=t<1.8?(t-.5)/1.3:Math.max(0,1-(t-3)/2.5);
-    ctx.save();ctx.globalAlpha=ra*.4;
-    ctx.font='110px "Songti SC","SimSun","KaiTi",serif';
-    ctx.textAlign='center';ctx.textBaseline='middle';
-    ctx.shadowColor='rgba(255,200,50,.35)';ctx.shadowBlur=40;
-    ctx.fillStyle='rgba(255,215,80,1)';
-    ctx.fillText('儒',W/2,H/2);
-    ctx.shadowBlur=0;ctx.restore();
+    if(ra>.01){
+      ctx.save();ctx.globalAlpha=ra*.4;
+      ctx.font='110px "Songti SC","SimSun","KaiTi",serif';
+      ctx.textAlign='center';ctx.textBaseline='middle';
+      ctx.shadowColor='rgba(255,200,50,.3)';ctx.shadowBlur=35;
+      ctx.fillStyle='rgba(255,215,80,1)';
+      ctx.fillText('儒',W/2,H/2);
+      ctx.shadowBlur=0;ctx.restore();
+    }
   }
 
   // 暗角
-  const vig=ctx.createRadialGradient(W/2,H/2,Math.min(W,H)*.15,W/2,H/2,Math.max(W,H)*.7);
-  vig.addColorStop(0,'rgba(0,0,0,0)');vig.addColorStop(1,'rgba(0,0,0,0.28)');
-  ctx.fillStyle=vig;ctx.fillRect(0,0,W,H);
+  ctx.fillStyle='rgba(0,0,0,.15)';
+  ctx.fillRect(0,0,W,40);ctx.fillRect(0,H-40,W,40);
+  ctx.fillRect(0,0,40,H);ctx.fillRect(W-40,0,40,H);
 
-  // 结语
-  if(t>22){
-    const ea=Math.min(.45,(t-22)/3);
+  // 结语（归无后显示，与落字共存）
+  if(t>21){
+    const ea=Math.min(.45,(t-21)/3);
     ctx.save();ctx.globalAlpha=ea;ctx.textAlign='center';
     ctx.font='26px "Songti SC","SimSun","KaiTi",serif';
     ctx.fillStyle='rgba(200,180,120,1)';
@@ -540,8 +507,8 @@ function tick(){
 // ═══════════════════════════════════════
 //  启动
 // ═══════════════════════════════════════
-document.getElementById('playBtn').addEventListener('click',()=>{
-  const b=document.getElementById('playBtn');
+document.getElementById('p').addEventListener('click',()=>{
+  const b=document.getElementById('p');
   b.style.opacity='0';setTimeout(()=>b.style.display='none',1200);
   started=true;startTime=performance.now();lastT=0;
   initAudio();
@@ -554,70 +521,63 @@ tick();
 // ═══════════════════════════════════════
 //  音效
 // ═══════════════════════════════════════
-let ac,masterGain;
+let ac,mg;
 function initAudio(){
   ac=new(AudioContext||webkitAudioContext)();
-  masterGain=ac.createGain();masterGain.gain.value=.12;masterGain.connect(ac.destination);
-  // drone
+  mg=ac.createGain();mg.gain.value=.12;mg.connect(ac.destination);
   const dr=ac.createOscillator(),dg=ac.createGain();
   dr.type='sawtooth';dr.frequency.value=42;
   dg.gain.setValueAtTime(0,ac.currentTime);
-  dg.gain.linearRampToValueAtTime(.07,ac.currentTime+3);
-  dg.gain.setValueAtTime(.07,ac.currentTime+18);
-  dg.gain.linearRampToValueAtTime(0,ac.currentTime+24);
-  const lp=ac.createBiquadFilter();lp.type='lowpass';lp.frequency.value=110;
-  dr.connect(lp);lp.connect(dg);dg.connect(masterGain);dr.start();dr.stop(ac.currentTime+26);
-  // 凝形
+  dg.gain.linearRampToValueAtTime(.06,ac.currentTime+3);
+  dg.gain.setValueAtTime(.06,ac.currentTime+18);
+  dg.gain.linearRampToValueAtTime(0,ac.currentTime+23);
+  const lp=ac.createBiquadFilter();lp.type='lowpass';lp.frequency.value=100;
+  dr.connect(lp);lp.connect(dg);dg.connect(mg);dr.start();dr.stop(ac.currentTime+25);
   setTimeout(()=>{
     const r=ac.createOscillator(),rg=ac.createGain();
     r.type='sine';r.frequency.setValueAtTime(70,ac.currentTime);
-    r.frequency.exponentialRampToValueAtTime(450,ac.currentTime+4);
-    rg.gain.setValueAtTime(.04,ac.currentTime);
-    rg.gain.exponentialRampToValueAtTime(.001,ac.currentTime+4);
-    r.connect(rg);rg.connect(masterGain);r.start();r.stop(ac.currentTime+4.5);
+    r.frequency.exponentialRampToValueAtTime(400,ac.currentTime+3.5);
+    rg.gain.setValueAtTime(.03,ac.currentTime);
+    rg.gain.exponentialRampToValueAtTime(.001,ac.currentTime+3.5);
+    r.connect(rg);rg.connect(mg);r.start();r.stop(ac.currentTime+4);
   },5000);
-  // 余韵
   setTimeout(()=>{
     [196,294,392,523].forEach((f,i)=>{
       const o=ac.createOscillator(),g=ac.createGain();
       o.type='sine';o.frequency.value=f;
-      g.gain.setValueAtTime(0,ac.currentTime+i*.5);
-      g.gain.linearRampToValueAtTime(.02,ac.currentTime+i*.5+.3);
-      g.gain.exponentialRampToValueAtTime(.001,ac.currentTime+5);
-      o.connect(g);g.connect(masterGain);o.start(ac.currentTime+i*.5);o.stop(ac.currentTime+6);
+      g.gain.setValueAtTime(0,ac.currentTime+i*.4);
+      g.gain.linearRampToValueAtTime(.02,ac.currentTime+i*.4+.2);
+      g.gain.exponentialRampToValueAtTime(.001,ac.currentTime+4);
+      o.connect(g);g.connect(mg);o.start(ac.currentTime+i*.4);o.stop(ac.currentTime+5);
     });
   },20000);
 }
-
-// 碰撞时实时调用
 function playClash(intensity){
   if(!ac)return;
-  const sz=ac.sampleRate*(.05+intensity*.08);
-  const buf=ac.createBuffer(1,sz,ac.sampleRate),d=buf.getChannelData(0);
-  for(let i=0;i<sz;i++)d[i]=(Math.random()*2-1)*Math.exp(-i/sz*8);
+  const n=ac.sampleRate*(.04+intensity*.05);
+  const buf=ac.createBuffer(1,n,ac.sampleRate),d=buf.getChannelData(0);
+  for(let i=0;i<n;i++)d[i]=(Math.random()*2-1)*Math.exp(-i/n*9);
   const s=ac.createBufferSource();s.buffer=buf;
-  const g=ac.createGain();g.gain.value=.15+intensity*.12;
-  s.connect(g);g.connect(masterGain);s.start();
-  // 金属共鸣
+  const g=ac.createGain();g.gain.value=.12+intensity*.1;
+  s.connect(g);g.connect(mg);s.start();
   const ring=ac.createOscillator(),rg=ac.createGain();
-  ring.type='sine';ring.frequency.value=700+Math.random()*500;
-  rg.gain.setValueAtTime(.05+intensity*.03,ac.currentTime);
-  rg.gain.exponentialRampToValueAtTime(.001,ac.currentTime+.4);
-  ring.connect(rg);rg.connect(masterGain);ring.start();ring.stop(ac.currentTime+.5);
+  ring.type='sine';ring.frequency.value=700+Math.random()*400;
+  rg.gain.setValueAtTime(.04+intensity*.02,ac.currentTime);
+  rg.gain.exponentialRampToValueAtTime(.001,ac.currentTime+.35);
+  ring.connect(rg);rg.connect(mg);ring.start();ring.stop(ac.currentTime+.4);
 }
-
 function playBurst(){
   if(!ac)return;
-  const sz=ac.sampleRate*.6,buf=ac.createBuffer(1,sz,ac.sampleRate),d=buf.getChannelData(0);
-  for(let i=0;i<sz;i++)d[i]=(Math.random()*2-1)*Math.exp(-i/sz*3.5);
+  const n=ac.sampleRate*.5,buf=ac.createBuffer(1,n,ac.sampleRate),d=buf.getChannelData(0);
+  for(let i=0;i<n;i++)d[i]=(Math.random()*2-1)*Math.exp(-i/n*3.5);
   const s=ac.createBufferSource();s.buffer=buf;
-  const g=ac.createGain();g.gain.value=.4;s.connect(g);g.connect(masterGain);s.start();
+  const g=ac.createGain();g.gain.value=.35;s.connect(g);g.connect(mg);s.start();
   const imp=ac.createOscillator(),ig=ac.createGain();
   imp.type='sine';imp.frequency.setValueAtTime(100,ac.currentTime);
-  imp.frequency.exponentialRampToValueAtTime(18,ac.currentTime+.7);
-  ig.gain.setValueAtTime(.35,ac.currentTime);
-  ig.gain.exponentialRampToValueAtTime(.001,ac.currentTime+1);
-  imp.connect(ig);ig.connect(masterGain);imp.start();imp.stop(ac.currentTime+1.2);
+  imp.frequency.exponentialRampToValueAtTime(18,ac.currentTime+.6);
+  ig.gain.setValueAtTime(.3,ac.currentTime);
+  ig.gain.exponentialRampToValueAtTime(.001,ac.currentTime+.8);
+  imp.connect(ig);ig.connect(mg);imp.start();imp.stop(ac.currentTime+1);
 }
 </script>
 </body>
