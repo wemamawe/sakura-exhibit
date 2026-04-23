@@ -3,387 +3,288 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>雨书 · Rain Book</title>
+<title>雨書 · Rain Book</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-body{background:#f4ead5;overflow:hidden;touch-action:none}
+body{background:#e8e0d0;overflow:hidden;touch-action:none}
 canvas{display:block}
 #p{position:fixed;top:0;left:0;width:100%;height:100%;z-index:1000;
-  background:rgba(244,234,213,.95);display:flex;align-items:center;justify-content:center;
+  background:rgba(232,224,208,.96);display:flex;align-items:center;justify-content:center;
   cursor:pointer;transition:opacity 1.5s}
 #p .i{text-align:center;color:#5a4a3a}
 #p .t{font:36px "Songti SC","SimSun","KaiTi",serif;letter-spacing:10px;margin-bottom:12px}
-#p .s{font:13px "Songti SC","SimSun",serif;opacity:.45;margin-bottom:28px;letter-spacing:3px}
+#p .s{font:13px "Songti SC","SimSun",serif;opacity:.4;margin-bottom:28px;letter-spacing:3px}
 #p .c{width:68px;height:68px;border-radius:50%;
-  border:1.5px solid rgba(90,74,58,.25);display:flex;align-items:center;justify-content:center;
+  border:1.5px solid rgba(90,74,58,.2);display:flex;align-items:center;justify-content:center;
   margin:0 auto;transition:all .3s}
 #p .c:hover{background:rgba(90,74,58,.06)}
 #p .r{width:0;height:0;border-top:12px solid transparent;border-bottom:12px solid transparent;
-  border-left:18px solid rgba(90,74,58,.5);margin-left:4px}
+  border-left:18px solid rgba(90,74,58,.45);margin-left:4px}
 </style>
 </head>
 <body>
 <div id="p"><div class="i">
-  <div class="t">雨 书</div>
-  <div class="s">雨湿古卷 · 字随水去 · 纸上空留</div>
+  <div class="t">雨 書</div>
+  <div class="s">雨落古卷 · 墨散成水 · 纸上空留</div>
   <div class="c"><div class="r"></div></div>
 </div></div>
 <canvas id="c"></canvas>
 <script>
 const C=document.getElementById('c'),ctx=C.getContext('2d');
 let W=innerWidth,H=innerHeight;C.width=W;C.height=H;
+const F='"Songti SC","SimSun","KaiTi",serif';
 
 // ═══════════════════════════════════════
-//  《关雎》— 诗经·国风·周南
+//  诗经·关雎
 // ═══════════════════════════════════════
 const poem=[
-  '關關雎鳩',
-  '在河之洲',
-  '窈窕淑女',
-  '君子好逑',
-  '參差荇菜',
-  '左右流之',
-  '窈窕淑女',
-  '寤寐求之',
-  '求之不得',
-  '寤寐思服',
-  '悠哉悠哉',
-  '輾轉反側',
-  '參差荇菜',
-  '左右采之',
-  '窈窕淑女',
-  '琴瑟友之',
-  '參差荇菜',
-  '左右芼之',
-  '窈窕淑女',
-  '鐘鼓樂之',
+  '關關雎鳩','在河之洲','窈窕淑女','君子好逑',
+  '參差荇菜','左右流之','窈窕淑女','寤寐求之',
+  '求之不得','寤寐思服','悠哉悠哉','輾轉反側',
+  '參差荇菜','左右采之','窈窕淑女','琴瑟友之',
+  '參差荇菜','左右芼之','窈窕淑女','鐘鼓樂之',
 ];
 
 // ═══════════════════════════════════════
-//  古籍排版参数
+//  古籍排版
 // ═══════════════════════════════════════
-const FONT='"Songti SC","SimSun","KaiTi",serif';
-let bookX,bookY,bookW,bookH,charSz,colGap,rowGap,cols,rows;
-let charGrid=[]; // {ch, col, row, x, y, alive, alpha, dripping, dripped}
+let bookX,bookY,bookW,bookH,charSz,colGap,rowGap;
+let chars=[]; // {ch,x,y,ink:1→0,wet:0→1}
 
-function layoutBook(){
+function layout(){
   const s=Math.min(W,H);
-  charSz=Math.max(16,Math.floor(s*.038));
-  colGap=charSz*1.8;
-  rowGap=charSz*1.5;
-  // 竖排：列从右到左，行从上到下
-  cols=poem.length;
-  rows=4; // 每列4字
-  bookW=cols*colGap+colGap;
-  bookH=rows*rowGap+charSz*2;
+  charSz=Math.max(14,Math.floor(s*.035));
+  colGap=charSz*1.7;
+  rowGap=charSz*1.45;
+  const cols=poem.length;
+  const rows=4;
+  bookW=cols*colGap+colGap*.8;
+  bookH=rows*rowGap+charSz*2.5;
   bookX=(W-bookW)/2;
-  bookY=(H-bookH)/2-H*.05;
-
-  charGrid=[];
+  bookY=(H-bookH)/2-H*.02;
+  chars=[];
   for(let c=0;c<cols;c++){
     const line=poem[c];
     for(let r=0;r<line.length;r++){
       // 竖排从右到左
-      const x=bookX+bookW-colGap*(c+1);
-      const y=bookY+charSz*1.2+r*rowGap;
-      charGrid.push({
-        ch:line[r], col:c, row:r,
-        x, y,
-        alive:true, alpha:1,
-        dripping:false, dripT:0, dripped:false,
-        // 水渍
-        wetAlpha:0,
-      });
+      const x=bookX+bookW-colGap*(c+.8);
+      const y=bookY+charSz*1.5+r*rowGap;
+      chars.push({ch:line[r],x,y,ink:1,wet:0,dissolveRate:0});
     }
   }
 }
-layoutBook();
+layout();
 
 // ═══════════════════════════════════════
-//  水珠粒子（从书页滴落，内含文字）
+//  雨滴
 // ═══════════════════════════════════════
-const DM=300;
-const dx=new Float32Array(DM),dy=new Float32Array(DM);
-const dvx=new Float32Array(DM),dvy=new Float32Array(DM);
-const da=new Float32Array(DM); // alpha
-const dsz=new Float32Array(DM); // size
-const dch=new Array(DM); // 内含的文字
-const dph=new Float32Array(DM);
-const dstate=new Uint8Array(DM); // 0=hanging 1=falling 2=splash
-const dhang=new Float32Array(DM); // hang progress
-let dc=0;
+const RN=120;
+const rx=new Float32Array(RN),ry=new Float32Array(RN);
+const rvy=new Float32Array(RN),rlen=new Float32Array(RN);
+const ral=new Float32Array(RN);
+function initRain(){
+  for(let i=0;i<RN;i++){
+    rx[i]=Math.random()*W;
+    ry[i]=-Math.random()*H;
+    rvy[i]=4+Math.random()*6;
+    rlen[i]=10+Math.random()*20;
+    ral[i]=.06+Math.random()*.1;
+  }
+}
+initRain();
 
-function spawnDrop(x,y,ch){
-  if(dc>=DM)return;
-  dx[dc]=x;dy[dc]=y;
-  dvx[dc]=0;dvy[dc]=0;
-  da[dc]=.9;
-  dsz[dc]=charSz*.5+Math.random()*charSz*.3;
-  dch[dc]=ch;
-  dph[dc]=Math.random()*Math.PI*2;
-  dstate[dc]=0; // hanging
-  dhang[dc]=0;
-  dc++;
+// 雨滴落在书上 → 溅开的涟漪
+const RM=80;
+const rpx=new Float32Array(RM),rpy=new Float32Array(RM);
+const rpr=new Float32Array(RM),rpa=new Float32Array(RM);
+let rpc=0;
+
+function addRipple(x,y){
+  if(rpc>=RM)rpc=0; // 循环覆盖
+  rpx[rpc]=x;rpy[rpc]=y;
+  rpr[rpc]=0;rpa[rpc]=.3;
+  rpc++;
 }
 
-// 水花碎裂小粒子
-const SM=200;
-const sx=new Float32Array(SM),sy=new Float32Array(SM);
-const svx=new Float32Array(SM),svy=new Float32Array(SM);
-const sa=new Float32Array(SM),ssr=new Float32Array(SM);
-const sch=new Array(SM);
-let scc=0;
-
-function spawnSplash(x,y,ch){
-  // 水花 + 文字碎片
-  for(let i=0;i<5&&scc<SM;i++){
-    const a=Math.random()*Math.PI*2;
-    const s=1+Math.random()*3;
-    sx[scc]=x+(Math.random()-.5)*8;
-    sy[scc]=y+(Math.random()-.5)*4;
-    svx[scc]=Math.cos(a)*s;svy[scc]=Math.sin(a)*s-1;
-    sa[scc]=.7;ssr[scc]=2+Math.random()*3;
-    sch[scc]=i===0?ch:null; // 第一个碎片带文字
-    scc++;
+function updateRain(t){
+  for(let i=0;i<RN;i++){
+    ry[i]+=rvy[i];
+    if(ry[i]>H+20){
+      ry[i]=-rlen[i];
+      rx[i]=Math.random()*W;
+      rvy[i]=4+Math.random()*6;
+    }
+    // 雨滴落在书页范围内
+    if(ry[i]>=bookY&&ry[i]<=bookY+bookH&&rx[i]>=bookX&&rx[i]<=bookX+bookW){
+      // 检查是否打到文字附近
+      for(let j=0;j<chars.length;j++){
+        const c=chars[j];
+        if(c.ink<=0)continue;
+        const dx=rx[i]-c.x,dy=ry[i]-c.y;
+        if(Math.abs(dx)<charSz*.6&&Math.abs(dy)<charSz*.6){
+          // 打湿这个字 → 加速溶解
+          c.wet=Math.min(1,c.wet+.015);
+          c.dissolveRate=Math.max(c.dissolveRate,.002+c.wet*.003);
+        }
+      }
+      // 溅起涟漪
+      if(Math.random()<.03) addRipple(rx[i],ry[i]);
+    }
   }
 }
 
+function drawRain(){
+  ctx.strokeStyle='rgba(140,160,180,.12)';
+  ctx.lineWidth=1;
+  for(let i=0;i<RN;i++){
+    ctx.globalAlpha=ral[i];
+    ctx.beginPath();
+    ctx.moveTo(rx[i],ry[i]);
+    ctx.lineTo(rx[i],ry[i]-rlen[i]);
+    ctx.stroke();
+  }
+  ctx.globalAlpha=1;
+}
+
+function drawRipples(){
+  for(let i=0;i<rpc;i++){
+    if(rpa[i]<.01)continue;
+    rpr[i]+=.4;
+    rpa[i]-=.005;
+    ctx.globalAlpha=rpa[i];
+    ctx.strokeStyle='rgba(160,175,190,.3)';
+    ctx.lineWidth=.8;
+    ctx.beginPath();
+    ctx.ellipse(rpx[i],rpy[i],rpr[i],rpr[i]*.3,0,0,Math.PI*2);
+    ctx.stroke();
+  }
+  ctx.globalAlpha=1;
+}
+
 // ═══════════════════════════════════════
-//  雨滴（背景氛围）
+//  墨水溶解流淌的痕迹
 // ═══════════════════════════════════════
-const RN=60;
-const rx=new Float32Array(RN),ry=new Float32Array(RN);
-const rvy2=new Float32Array(RN),ral=new Float32Array(RN);
-for(let i=0;i<RN;i++){
-  rx[i]=Math.random()*W;ry[i]=Math.random()*H;
-  rvy2[i]=2+Math.random()*4;ral[i]=.04+Math.random()*.08;
+const IM=500;
+const ix=new Float32Array(IM),iy=new Float32Array(IM);
+const ivx=new Float32Array(IM),ivy=new Float32Array(IM);
+const ia=new Float32Array(IM),isz=new Float32Array(IM);
+let ic=0;
+
+function spawnInk(x,y){
+  if(ic>=IM)return;
+  ix[ic]=x+(Math.random()-.5)*charSz*.3;
+  iy[ic]=y+(Math.random()-.5)*charSz*.2;
+  ivx[ic]=(Math.random()-.5)*.15;
+  ivy[ic]=.2+Math.random()*.4; // 向下流
+  ia[ic]=.15+Math.random()*.15;
+  isz[ic]=1+Math.random()*2;
+  ic++;
+}
+
+function updateDrawInk(){
+  let alive=0;
+  for(let i=0;i<ic;i++){
+    ix[i]+=ivx[i];iy[i]+=ivy[i];
+    ivy[i]+=.01; // 微重力
+    ivx[i]*=.99;
+    ia[i]-=.0008;
+    if(ia[i]<.005||iy[i]>bookY+bookH+50)continue;
+    ctx.globalAlpha=ia[i];
+    ctx.fillStyle='rgba(50,40,30,.6)';
+    ctx.beginPath();ctx.arc(ix[i],iy[i],isz[i],0,Math.PI*2);ctx.fill();
+    if(alive!==i){ix[alive]=ix[i];iy[alive]=iy[i];ivx[alive]=ivx[i];ivy[alive]=ivy[i];
+      ia[alive]=ia[i];isz[alive]=isz[i];}
+    alive++;
+  }
+  ic=alive;ctx.globalAlpha=1;
 }
 
 // ═══════════════════════════════════════
 //  绘制古籍书页
 // ═══════════════════════════════════════
-function drawBook(t){
-  // 书页背景（泛黄宣纸质感）
-  const bx=bookX-charSz,by=bookY-charSz;
-  const bw=bookW+charSz*2,bh=bookH+charSz*2;
+function drawBook(){
+  const bx=bookX-charSz*1.2,by=bookY-charSz*1.2;
+  const bw=bookW+charSz*2.4,bh=bookH+charSz*2.4;
 
-  // 纸张
+  // 阴影
   ctx.save();
-  ctx.shadowColor='rgba(0,0,0,.12)';ctx.shadowBlur=20;ctx.shadowOffsetY=5;
-  ctx.fillStyle='#f0e4c8';
+  ctx.shadowColor='rgba(0,0,0,.1)';ctx.shadowBlur=25;ctx.shadowOffsetY=6;
+  ctx.fillStyle='#efe5cb';
   ctx.fillRect(bx,by,bw,bh);
-  ctx.shadowBlur=0;
+  ctx.shadowBlur=0;ctx.restore();
 
-  // 纸张纹理（细横线）
-  ctx.globalAlpha=.03;
-  ctx.strokeStyle='#8a7a5a';ctx.lineWidth=.5;
-  for(let i=0;i<bh;i+=3){
+  // 纸纹
+  ctx.globalAlpha=.025;
+  ctx.strokeStyle='#9a8a6a';ctx.lineWidth=.5;
+  for(let i=0;i<bh;i+=2.5){
     ctx.beginPath();ctx.moveTo(bx,by+i);ctx.lineTo(bx+bw,by+i);ctx.stroke();
   }
 
-  // 书页边框（线装书风格）
-  ctx.globalAlpha=.15;
-  ctx.strokeStyle='#6a5a4a';ctx.lineWidth=1.5;
-  ctx.strokeRect(bx+4,by+4,bw-8,bh-8);
-  // 内框
-  ctx.globalAlpha=.08;
-  ctx.strokeRect(bx+10,by+10,bw-20,bh-20);
+  // 湿痕（整体）
+  ctx.globalAlpha=.04;
+  ctx.fillStyle='rgba(150,165,175,.5)';
+  for(let i=0;i<chars.length;i++){
+    const c=chars[i];
+    if(c.wet>.05){
+      ctx.globalAlpha=c.wet*.06;
+      ctx.beginPath();
+      ctx.ellipse(c.x,c.y,charSz*.6+c.wet*charSz*.3,charSz*.7+c.wet*charSz*.4,0,0,Math.PI*2);
+      ctx.fill();
+    }
+  }
 
-  // 装订线（左侧）
+  // 外框
   ctx.globalAlpha=.12;
-  ctx.strokeStyle='#8a6a4a';ctx.lineWidth=2;
-  const bindX=bx+bw-8;
-  for(let i=0;i<4;i++){
-    const yy=by+bh*.2+i*bh*.2;
-    ctx.beginPath();ctx.moveTo(bindX-2,yy-8);ctx.lineTo(bindX-2,yy+8);ctx.stroke();
-    ctx.beginPath();ctx.moveTo(bindX+2,yy-8);ctx.lineTo(bindX+2,yy+8);ctx.stroke();
+  ctx.strokeStyle='#6a5a4a';ctx.lineWidth=1.5;
+  ctx.strokeRect(bx+5,by+5,bw-10,bh-10);
+  ctx.globalAlpha=.06;
+  ctx.strokeRect(bx+12,by+12,bw-24,bh-24);
+
+  // 装订线（右侧，竖排古籍右翻）
+  ctx.globalAlpha=.1;
+  ctx.strokeStyle='#7a6a50';ctx.lineWidth=1.5;
+  const bindX=bx+bw-10;
+  for(let i=0;i<5;i++){
+    const yy=by+bh*.15+i*bh*.175;
+    ctx.beginPath();ctx.moveTo(bindX,yy-6);ctx.lineTo(bindX,yy+6);ctx.stroke();
   }
-  ctx.restore();
+  ctx.globalAlpha=1;
+}
 
-  // 水渍痕迹
-  charGrid.forEach(g=>{
-    if(g.wetAlpha>.01){
-      ctx.globalAlpha=g.wetAlpha*.15;
-      ctx.fillStyle='#b8a888';
-      ctx.beginPath();
-      ctx.ellipse(g.x,g.y+charSz*.3,charSz*.5,charSz*.6,0,0,Math.PI*2);
-      ctx.fill();
-    }
-  });
-
-  // 绘制文字
-  ctx.font=charSz+'px '+FONT;
+function drawChars(t){
+  ctx.font=charSz+'px '+F;
   ctx.textAlign='center';ctx.textBaseline='middle';
-  charGrid.forEach(g=>{
-    if(!g.alive&&!g.dripping)return;
-    let a=g.alpha;
-    if(g.dripping){
-      // 文字溶解效果：变淡+微微下移
-      const dp=g.dripT;
-      a*=Math.max(0,1-dp);
+  for(let i=0;i<chars.length;i++){
+    const c=chars[i];
+    if(c.ink<.01)continue;
+
+    // 溶解中 → 产生墨水粒子
+    if(c.dissolveRate>0&&c.ink>.05&&Math.random()<c.dissolveRate*8){
+      spawnInk(c.x,c.y);
     }
-    if(a<.01)return;
-    ctx.globalAlpha=a;
-    // 墨色，湿了之后略浅
-    const wet=g.wetAlpha;
-    const r2=Math.floor(40+wet*30);
-    const g2=Math.floor(30+wet*25);
-    const b2=Math.floor(25+wet*20);
+    // 墨水浓度下降
+    if(c.dissolveRate>0) c.ink=Math.max(0,c.ink-c.dissolveRate);
+
+    // 绘制文字
+    ctx.globalAlpha=c.ink;
+    // 墨色随湿润度变化：干=深墨，湿=浅灰偏蓝
+    const wetP=c.wet;
+    const r2=Math.floor(35+wetP*60+(1-c.ink)*40);
+    const g2=Math.floor(28+wetP*55+(1-c.ink)*40);
+    const b2=Math.floor(22+wetP*65+(1-c.ink)*50);
     ctx.fillStyle='rgb('+r2+','+g2+','+b2+')';
-    const yOff=g.dripping?g.dripT*charSz*.3:0;
-    ctx.fillText(g.ch,g.x,g.y+yOff);
-  });
-  ctx.globalAlpha=1;
-}
 
-// ═══════════════════════════════════════
-//  绘制水珠
-// ═══════════════════════════════════════
-function drawDrops(){
-  for(let i=0;i<dc;i++){
-    if(da[i]<.02)continue;
-    const x=dx[i],y=dy[i],sz=dsz[i];
-    ctx.save();
-
-    if(dstate[i]===0){
-      // 悬挂：水珠拉长，底部圆顶部尖
-      const stretch=1+dhang[i]*.5;
-      ctx.globalAlpha=da[i]*.5;
-      ctx.fillStyle='rgba(180,200,220,.4)';
-      ctx.beginPath();
-      ctx.ellipse(x,y+sz*stretch*.3,sz*.4,sz*stretch*.5,0,0,Math.PI*2);
-      ctx.fill();
-      // 水珠高光
-      ctx.globalAlpha=da[i]*.3;
-      ctx.fillStyle='rgba(255,255,255,.6)';
-      ctx.beginPath();
-      ctx.ellipse(x-sz*.1,y-sz*.1,sz*.12,sz*.15,0,0,Math.PI*2);
-      ctx.fill();
-      // 内含文字
-      if(dch[i]){
-        ctx.globalAlpha=da[i]*.6;
-        ctx.font=Math.floor(sz*.7)+'px '+FONT;
-        ctx.textAlign='center';ctx.textBaseline='middle';
-        ctx.fillStyle='rgba(60,45,35,.7)';
-        ctx.fillText(dch[i],x,y+sz*stretch*.15);
-      }
-    }else if(dstate[i]===1){
-      // 下落：水滴形（上尖下圆）
-      ctx.globalAlpha=da[i]*.45;
-      ctx.fillStyle='rgba(170,195,215,.45)';
-      ctx.beginPath();
-      ctx.moveTo(x,y-sz*.6); // 上尖
-      ctx.quadraticCurveTo(x-sz*.35,y-sz*.1,x-sz*.3,y+sz*.2);
-      ctx.quadraticCurveTo(x,y+sz*.5,x+sz*.3,y+sz*.2);
-      ctx.quadraticCurveTo(x+sz*.35,y-sz*.1,x,y-sz*.6);
-      ctx.fill();
-      // 高光
-      ctx.globalAlpha=da[i]*.2;
-      ctx.fillStyle='rgba(255,255,255,.5)';
-      ctx.beginPath();
-      ctx.ellipse(x-sz*.08,y-sz*.2,sz*.08,sz*.12,-.3,0,Math.PI*2);
-      ctx.fill();
-      // 内含文字（随水珠旋转微动）
-      if(dch[i]){
-        ctx.globalAlpha=da[i]*.5;
-        ctx.font=Math.floor(sz*.6)+'px '+FONT;
-        ctx.textAlign='center';ctx.textBaseline='middle';
-        ctx.fillStyle='rgba(60,45,35,.6)';
-        ctx.fillText(dch[i],x,y);
-      }
+    // 溶解时文字微微散开
+    const spread=(1-c.ink)*.5;
+    if(spread>.05){
+      // 用 shadow 模拟墨水晕染
+      ctx.shadowColor='rgba('+r2+','+g2+','+b2+','+c.ink*.3+')';
+      ctx.shadowBlur=spread*charSz*.8;
     }
-    ctx.restore();
-  }
-}
-
-function updateDrops(){
-  let alive=0;
-  for(let i=0;i<dc;i++){
-    dph[i]+=.02;
-    if(dstate[i]===0){
-      // 悬挂→拉长→断裂下落
-      dhang[i]+=.008+Math.random()*.004;
-      dy[i]+=.15; // 缓慢下移
-      if(dhang[i]>1){dstate[i]=1;dvy[i]=1;}
-    }else if(dstate[i]===1){
-      // 下落
-      dvy[i]+=.12; // 重力
-      dvx[i]+=Math.sin(dph[i])*.02;
-      dx[i]+=dvx[i];dy[i]+=dvy[i];
-      da[i]-=.003;
-      // 落到书页底部以下
-      if(dy[i]>bookY+bookH+charSz*2){
-        spawnSplash(dx[i],dy[i],dch[i]);
-        da[i]=0;
-      }
-      // 落出屏幕
-      if(dy[i]>H+30)da[i]=0;
-    }
-    if(da[i]>.01){
-      if(alive!==i){dx[alive]=dx[i];dy[alive]=dy[i];dvx[alive]=dvx[i];dvy[alive]=dvy[i];
-        da[alive]=da[i];dsz[alive]=dsz[i];dch[alive]=dch[i];dph[alive]=dph[i];
-        dstate[alive]=dstate[i];dhang[alive]=dhang[i];}
-      alive++;
-    }
-  }
-  dc=alive;
-}
-
-function updateDrawSplash(){
-  let alive=0;
-  for(let i=0;i<scc;i++){
-    svx[i]*=.97;svy[i]+=.06;
-    sx[i]+=svx[i];sy[i]+=svy[i];
-    sa[i]-=.008;
-    if(sa[i]<.02||sy[i]>H+20)continue;
-    ctx.globalAlpha=sa[i]*.4;
-    ctx.fillStyle='rgba(170,195,215,.5)';
-    ctx.beginPath();ctx.arc(sx[i],sy[i],ssr[i]*sa[i],0,Math.PI*2);ctx.fill();
-    // 碎片中的文字
-    if(sch[i]){
-      ctx.globalAlpha=sa[i]*.4;
-      ctx.font='10px '+FONT;
-      ctx.textAlign='center';ctx.textBaseline='middle';
-      ctx.fillStyle='rgba(60,45,35,.5)';
-      ctx.fillText(sch[i],sx[i],sy[i]);
-    }
-    if(alive!==i){sx[alive]=sx[i];sy[alive]=sy[i];svx[alive]=svx[i];svy[alive]=svy[i];
-      sa[alive]=sa[i];ssr[alive]=ssr[i];sch[alive]=sch[i];}
-    alive++;
-  }
-  scc=alive;ctx.globalAlpha=1;
-}
-
-// ═══════════════════════════════════════
-//  背景雨丝
-// ═══════════════════════════════════════
-function drawRain(){
-  ctx.strokeStyle='rgba(150,170,190,.08)';ctx.lineWidth=1;
-  for(let i=0;i<RN;i++){
-    ry[i]+=rvy2[i];
-    if(ry[i]>H+10){ry[i]=-10;rx[i]=Math.random()*W;}
-    ctx.globalAlpha=ral[i];
-    ctx.beginPath();ctx.moveTo(rx[i],ry[i]);ctx.lineTo(rx[i]-.5,ry[i]-8-rvy2[i]*2);ctx.stroke();
+    ctx.fillText(c.ch,c.x,c.y);
+    ctx.shadowBlur=0;
   }
   ctx.globalAlpha=1;
-}
-
-// ═══════════════════════════════════════
-//  调度：文字逐个消失
-// ═══════════════════════════════════════
-let dripQueue=[];
-let nextDripT=0;
-let dripIdx=0;
-let allDripped=false;
-
-function initDripQueue(){
-  // 从第一列第一行开始，竖排从右到左，从上到下
-  dripQueue=charGrid.slice().sort((a,b)=>{
-    if(a.col!==b.col)return a.col-b.col; // 右列先（col小=右）
-    return a.row-b.row;
-  });
-  nextDripT=2; // 2秒后开始
-  dripIdx=0;
 }
 
 // ═══════════════════════════════════════
@@ -393,75 +294,44 @@ let started=false,startTime=0;
 
 function tick(){
   requestAnimationFrame(tick);
-  if(!started){
-    // 背景
-    ctx.fillStyle='#f4ead5';ctx.fillRect(0,0,W,H);
-    return;
-  }
+  if(!started){ctx.fillStyle='#e8e0d0';ctx.fillRect(0,0,W,H);return;}
   const t=(performance.now()-startTime)/1000;
 
-  // 背景（天色偏灰蓝，雨天）
+  // 天色（灰蓝雨天）
   const bg=ctx.createLinearGradient(0,0,0,H);
-  bg.addColorStop(0,'#e8e0d0');
-  bg.addColorStop(.5,'#ede5d5');
-  bg.addColorStop(1,'#f0e8d8');
+  bg.addColorStop(0,'#ddd8cc');bg.addColorStop(.4,'#e2dcd0');bg.addColorStop(1,'#e8e2d6');
   ctx.fillStyle=bg;ctx.fillRect(0,0,W,H);
 
-  // 雨丝
+  // 雨
+  updateRain(t);
   drawRain();
 
-  // 调度文字滴落
-  if(dripIdx<dripQueue.length&&t>=nextDripT){
-    const g=dripQueue[dripIdx];
-    g.dripping=true;
-    g.dripT=0;
-    g.wetAlpha=1;
-    // 生成水珠
-    spawnDrop(g.x,g.y+charSz*.5,g.ch);
-    dripIdx++;
-    // 间隔递减（越来越快）
-    const progress=dripIdx/dripQueue.length;
-    if(progress<.3) nextDripT=t+.8+Math.random()*.4; // 慢
-    else if(progress<.6) nextDripT=t+.4+Math.random()*.3; // 中
-    else if(progress<.85) nextDripT=t+.2+Math.random()*.15; // 快
-    else nextDripT=t+.08+Math.random()*.08; // 极快
-  }
-  if(dripIdx>=dripQueue.length&&!allDripped) allDripped=true;
+  // 书页
+  drawBook();
 
-  // 更新正在溶解的文字
-  charGrid.forEach(g=>{
-    if(g.dripping){
-      g.dripT+=.015;
-      if(g.dripT>=1){
-        g.dripping=false;
-        g.alive=false;
-        g.alpha=0;
-      }
-    }
-    // 水渍慢慢干
-    if(g.wetAlpha>0) g.wetAlpha-=.001;
-  });
+  // 墨水流淌
+  updateDrawInk();
 
-  // 绘制书页
-  drawBook(t);
+  // 涟漪
+  drawRipples();
 
-  // 水珠
-  updateDrops();
-  drawDrops();
-  updateDrawSplash();
+  // 文字
+  drawChars(t);
 
-  // 结语
-  const aliveCount=charGrid.filter(g=>g.alive||g.dripping).length;
-  if(aliveCount===0&&dc===0){
-    const fadeT=t-(startTime/1000+nextDripT);
-    const ea=Math.min(.6,fadeT*.08);
+  // 结语：所有文字消失后
+  const aliveCount=chars.filter(c=>c.ink>.01).length;
+  if(aliveCount===0){
+    // 从全部消失那一刻开始计时
+    if(!this._endT) this._endT=t;
+    const et=t-this._endT;
+    const ea=Math.min(.55,et*.06);
     if(ea>.01){
       ctx.save();ctx.globalAlpha=ea;
       ctx.textAlign='center';ctx.textBaseline='middle';
-      ctx.font=Math.floor(charSz*.9)+'px '+FONT;
-      ctx.fillStyle='rgba(90,74,58,.8)';
-      ctx.fillText('字已隨水去',W/2,H/2-charSz*.6);
-      ctx.fillText('紙上空留痕',W/2,H/2+charSz*.6);
+      ctx.font=Math.floor(charSz*1.1)+'px '+F;
+      ctx.fillStyle='rgba(90,74,58,.85)';
+      ctx.fillText('字已隨水去',W/2,H/2-charSz*.7);
+      ctx.fillText('紙上空留痕',W/2,H/2+charSz*.7);
       ctx.restore();
     }
   }
@@ -473,28 +343,27 @@ function tick(){
 function initAudio(){
   const ac=new(AudioContext||webkitAudioContext)();
   const m=ac.createGain();m.gain.value=.08;m.connect(ac.destination);
-  // 雨声白噪
-  const sz=ac.sampleRate*2;
-  const buf=ac.createBuffer(1,sz,ac.sampleRate);
-  const d=buf.getChannelData(0);
-  for(let i=0;i<sz;i++) d[i]=(Math.random()*2-1)*.3;
-  const rain=ac.createBufferSource();rain.buffer=buf;rain.loop=true;
-  const lp=ac.createBiquadFilter();lp.type='lowpass';lp.frequency.value=800;
-  const rg=ac.createGain();rg.gain.value=.15;
-  rain.connect(lp);lp.connect(rg);rg.connect(m);rain.start();
-  // 水滴声（定期）
-  function dropSound(){
+  // 雨声
+  const sz=ac.sampleRate*2,buf=ac.createBuffer(1,sz,ac.sampleRate),d=buf.getChannelData(0);
+  for(let i=0;i<sz;i++)d[i]=(Math.random()*2-1)*.25;
+  const s=ac.createBufferSource();s.buffer=buf;s.loop=true;
+  const lp=ac.createBiquadFilter();lp.type='lowpass';lp.frequency.value=600;
+  const rg=ac.createGain();rg.gain.value=.2;
+  s.connect(lp);lp.connect(rg);rg.connect(m);s.start();
+  // 随机水滴声
+  function drip(){
     if(!started)return;
     const o=ac.createOscillator(),g=ac.createGain();
     o.type='sine';
-    o.frequency.setValueAtTime(800+Math.random()*400,ac.currentTime);
-    o.frequency.exponentialRampToValueAtTime(200+Math.random()*100,ac.currentTime+.15);
-    g.gain.setValueAtTime(.03,ac.currentTime);
-    g.gain.exponentialRampToValueAtTime(.001,ac.currentTime+.2);
-    o.connect(g);g.connect(m);o.start();o.stop(ac.currentTime+.25);
-    setTimeout(dropSound,500+Math.random()*2000);
+    const freq=600+Math.random()*600;
+    o.frequency.setValueAtTime(freq,ac.currentTime);
+    o.frequency.exponentialRampToValueAtTime(freq*.3,ac.currentTime+.12);
+    g.gain.setValueAtTime(.015+Math.random()*.01,ac.currentTime);
+    g.gain.exponentialRampToValueAtTime(.001,ac.currentTime+.15);
+    o.connect(g);g.connect(m);o.start();o.stop(ac.currentTime+.2);
+    setTimeout(drip,800+Math.random()*2500);
   }
-  setTimeout(dropSound,1000);
+  setTimeout(drip,500);
 }
 
 // ═══════════════════════════════════════
@@ -504,10 +373,9 @@ document.getElementById('p').addEventListener('click',()=>{
   const b=document.getElementById('p');
   b.style.opacity='0';setTimeout(()=>b.style.display='none',1500);
   started=true;startTime=performance.now();
-  initDripQueue();
   initAudio();
 },{once:true});
-window.addEventListener('resize',()=>{W=innerWidth;H=innerHeight;C.width=W;C.height=H;layoutBook();initDripQueue();});
+window.addEventListener('resize',()=>{W=innerWidth;H=innerHeight;C.width=W;C.height=H;layout();});
 C.addEventListener('touchstart',e=>e.preventDefault(),{passive:false});
 C.addEventListener('touchmove',e=>e.preventDefault(),{passive:false});
 tick();
