@@ -70,73 +70,149 @@ for(let i=0;i<TXT.length;i++)SZ.forEach(s=>{gCC(TXT[i],s,42,60);gCC(TXT[i],s,210
 //  只渲染一次，每帧用 drawImage 贴图
 // ═══════════════════════════════════════
 function renderSwordCanvas(hue){
-  const len=400; // 基准长度，运行时缩放
-  const bw=len*.07;
+  const len=400;
+  const bw=len*.055; // 剑身半宽
   const cv=document.createElement('canvas');
-  // 剑占据的范围：宽 bw*6, 高 len*1.2
-  const cw=Math.ceil(bw*8),ch=Math.ceil(len*1.25);
+  const cw=Math.ceil(bw*12),ch=Math.ceil(len*1.3);
   cv.width=cw;cv.height=ch;
   const x=cv.getContext('2d');
-  const ox=cw/2,oy=ch-len*.18; // 剑柄底部位置
+  const ox=cw/2,oy=ch-len*.2; // 剑柄底部
 
-  // 光晕
-  x.globalAlpha=.15;
-  const g=x.createLinearGradient(ox,oy-len*1.05,ox,oy+len*.1);
-  g.addColorStop(0,'hsla('+hue+',90%,80%,1)');
-  g.addColorStop(.4,'hsla('+hue+',70%,60%,.6)');
+  // === 剑身形状（古剑剑锋） ===
+  // 剑尖→剑身→护手→剑柄
+  // 剑尖：锋利三角形，占剑身前15%
+  // 剑身：双刃，略向外弧（有刃线）
+  // 护手：宽出剑身
+  // 剑柄：窄于剑身
+
+  const tipY=oy-len;        // 剑尖
+  const neckY=oy-len*.85;   // 剑锋底部（尖端开始变宽）
+  const bodyTopY=oy-len*.82;// 剑身上端
+  const guardY=oy;          // 护手
+  const handleY=oy+len*.16; // 剑柄底
+
+  // 剑身宽度变化：尖端窄→中部略宽→护手处收窄
+  const bladeW=bw;      // 最宽处
+  const tipW=bw*.06;    // 剑尖宽度（几乎为0）
+  const neckW=bw*.5;    // 剑锋底部宽度
+  const guardW=bw*2.2;  // 护手宽
+  const handleW=bw*.4;  // 剑柄宽
+
+  // --- 剑身光晕 ---
+  x.globalAlpha=.12;
+  const g=x.createLinearGradient(ox,tipY-10,ox,handleY);
+  g.addColorStop(0,'hsla('+hue+',90%,85%,1)');
+  g.addColorStop(.15,'hsla('+hue+',80%,75%,.8)');
+  g.addColorStop(.5,'hsla('+hue+',70%,60%,.4)');
   g.addColorStop(1,'hsla('+hue+',50%,40%,0)');
   x.fillStyle=g;
   x.beginPath();
-  x.moveTo(ox,oy-len*1.05);
-  x.lineTo(ox-bw*2.5,oy-len*.35);
-  x.lineTo(ox-bw*2.5,oy);x.lineTo(ox+bw*2.5,oy);x.lineTo(ox+bw*2.5,oy-len*.35);
+  x.moveTo(ox,tipY-10);
+  x.lineTo(ox-bladeW*2,oy-len*.4);
+  x.lineTo(ox-bladeW*2,guardY);
+  x.lineTo(ox+bladeW*2,guardY);
+  x.lineTo(ox+bladeW*2,oy-len*.4);
   x.closePath();x.fill();
 
-  // 轮廓
-  x.globalAlpha=.1;
-  x.strokeStyle='hsla('+hue+',70%,75%,1)';x.lineWidth=1.2;
+  // --- 剑身轮廓 ---
+  x.globalAlpha=.12;
+  x.strokeStyle='hsla('+hue+',75%,78%,1)';x.lineWidth=1.2;
   x.beginPath();
-  x.moveTo(ox,oy-len);x.lineTo(ox-bw*.3,oy-len*.92);
-  x.lineTo(ox-bw,oy-len*.12);x.lineTo(ox-bw*1.8,oy+2);x.lineTo(ox-bw*1.8,oy+10);
-  x.lineTo(ox-bw*.45,oy+10);x.lineTo(ox-bw*.38,oy+len*.18);
-  x.lineTo(ox+bw*.38,oy+len*.18);x.lineTo(ox+bw*.45,oy+10);
-  x.lineTo(ox+bw*1.8,oy+10);x.lineTo(ox+bw*1.8,oy+2);
-  x.lineTo(ox+bw,oy-len*.12);x.lineTo(ox+bw*.3,oy-len*.92);
+  // 剑尖（锋利三角）
+  x.moveTo(ox,tipY);
+  // 左刃 — 剑尖到剑身，略微外弧
+  x.quadraticCurveTo(ox-neckW*1.1,neckY,ox-bladeW,bodyTopY);
+  // 左刃身 — 微弧（中间略宽）
+  x.quadraticCurveTo(ox-bladeW*1.08,oy-len*.45,ox-bladeW*.95,guardY-5);
+  // 护手左
+  x.lineTo(ox-guardW,guardY-2);
+  x.lineTo(ox-guardW,guardY+6);
+  // 剑柄左
+  x.lineTo(ox-handleW,guardY+6);
+  x.lineTo(ox-handleW,handleY-4);
+  // 剑首（柄底圆）
+  x.quadraticCurveTo(ox-handleW*1.3,handleY,ox,handleY+3);
+  x.quadraticCurveTo(ox+handleW*1.3,handleY,ox+handleW,handleY-4);
+  // 剑柄右
+  x.lineTo(ox+handleW,guardY+6);
+  x.lineTo(ox+guardW,guardY+6);
+  x.lineTo(ox+guardW,guardY-2);
+  // 护手右
+  x.lineTo(ox+bladeW*.95,guardY-5);
+  // 右刃身
+  x.quadraticCurveTo(ox+bladeW*1.08,oy-len*.45,ox+bladeW,bodyTopY);
+  // 右刃 — 剑尖
+  x.quadraticCurveTo(ox+neckW*1.1,neckY,ox,tipY);
   x.closePath();x.stroke();
-  // 剑脊
-  x.globalAlpha=.05;x.beginPath();x.moveTo(ox,oy-len);x.lineTo(ox,oy);
-  x.strokeStyle='hsla('+hue+',60%,70%,1)';x.lineWidth=.6;x.stroke();
 
-  // 文字填充
+  // --- 剑脊（中线，凸起感） ---
+  x.globalAlpha=.06;
+  x.strokeStyle='hsla('+hue+',65%,75%,1)';x.lineWidth=1;
+  x.beginPath();
+  x.moveTo(ox,tipY+5);
+  x.lineTo(ox,guardY-3);
+  x.stroke();
+  // 剑脊两侧淡线（表示血槽）
+  x.globalAlpha=.035;
+  x.lineWidth=.5;
+  [-1,1].forEach(side=>{
+    x.beginPath();
+    x.moveTo(ox+side*bladeW*.35,bodyTopY+5);
+    x.lineTo(ox+side*bladeW*.3,guardY-8);
+    x.stroke();
+  });
+
+  // --- 刃线（剑身边缘高亮） ---
+  x.globalAlpha=.08;
+  x.strokeStyle='hsla('+hue+',85%,85%,1)';x.lineWidth=.8;
+  [-1,1].forEach(side=>{
+    x.beginPath();
+    x.moveTo(ox+side*tipW,tipY+2);
+    x.quadraticCurveTo(ox+side*neckW*1.1,neckY,ox+side*bladeW,bodyTopY);
+    x.quadraticCurveTo(ox+side*bladeW*1.08,oy-len*.45,ox+side*bladeW*.95,guardY-5);
+    x.stroke();
+  });
+
+  // --- 剑尖高光 ---
+  x.globalAlpha=.2;
+  const tipGlow=x.createRadialGradient(ox,tipY+15,2,ox,tipY+15,len*.08);
+  tipGlow.addColorStop(0,'hsla('+hue+',90%,90%,1)');
+  tipGlow.addColorStop(1,'hsla('+hue+',80%,70%,0)');
+  x.fillStyle=tipGlow;
+  x.fillRect(ox-bw*2,tipY-5,bw*4,len*.15);
+
+  // --- 文字填充 ---
   const step=9;
   const rows=Math.floor(len/step);
   for(let i=0;i<rows;i++){
-    const ct=i/rows;
+    const ct=i/rows; // 0=柄端 1=尖端
     const cy=oy-len*ct;
+    // 计算该位置剑身宽度
     let lw;
-    if(ct>.95)lw=bw*.2;
-    else if(ct>.12)lw=bw*(.3+.7*Math.min(1,(ct-.12)/.15));
-    else lw=bw*1.5;
+    if(ct>.97) lw=tipW; // 剑尖极窄
+    else if(ct>.85) lw=tipW+(neckW-tipW)*((ct-.85)/.12); // 剑锋区域向外扩
+    else if(ct>.15) lw=bladeW*(.9+Math.sin((ct-.15)/.7*Math.PI)*.1); // 剑身微弧
+    else lw=handleW; // 剑柄
     const cols=Math.max(1,Math.floor(lw*2/step));
     for(let j=0;j<cols;j++){
       const cx2=ox-lw+(j+.5)*(lw*2)/cols;
       const ch2=rc();
       const sz=SZ[Math.floor(Math.random()*SZ.length)];
-      const lit=45+Math.floor(ct*25);
-      x.globalAlpha=.35+ct*.45;
+      const lit=42+Math.floor(ct*28); // 尖端更亮
+      x.globalAlpha=.25+ct*.5;
       x.font=sz+'px "Songti SC","SimSun","KaiTi",serif';
       x.textAlign='center';x.textBaseline='middle';
       x.fillStyle='hsl('+hue+',80%,'+lit+'%)';
       x.fillText(ch2,cx2,cy);
     }
   }
-  // 护手
-  x.globalAlpha=.45;
+  // 护手文字
+  x.globalAlpha=.4;
   for(let j=-3;j<=3;j++){
-    x.font='12px "Songti SC","SimSun","KaiTi",serif';
+    x.font='11px "Songti SC","SimSun","KaiTi",serif';
     x.textAlign='center';x.textBaseline='middle';
-    x.fillStyle='hsl('+hue+',80%,70%)';
-    x.fillText(rc(),ox+j*10,oy+4);
+    x.fillStyle='hsl('+hue+',80%,68%)';
+    x.fillText(rc(),ox+j*guardW/3.5,guardY+2);
   }
 
   return {cv,ox,oy,len};
