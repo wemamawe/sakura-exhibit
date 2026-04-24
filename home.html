@@ -90,6 +90,7 @@ const I18N = {
     catPoetry: '📜 Poetry',
     catEmotion: '💫 Emotion',
     catInstall: '🎨 Installation',
+    catGame: '🎮 Game',
     footerTech: 'Made with Canvas 2D & Three.js · Zero Dependencies',
     footerCredit: '',
   },
@@ -105,6 +106,7 @@ const I18N = {
     catPoetry: '📜 诗词',
     catEmotion: '💫 情绪',
     catInstall: '🎨 装置',
+    catGame: '🎮 游戏',
     footerTech: '基于 Canvas 2D & Three.js · 零外部依赖',
     footerCredit: '',
   }
@@ -137,6 +139,9 @@ const scenes = [
   { file:'snow.html',     emoji:'❄️', en:'Cold Mountain',    zh:'寒山',         sub_en:'Friedrich · Sublime Solitude',   sub_zh:'Zhang Ji · Fengqiao',  cat:'poetry' },
   { file:'mirror.html',   emoji:'🪞', en:'Mirror Blossom',   zh:'镜花',         sub_en:'Magritte · Surreal Reflection',  sub_zh:'Mirror & Water',       cat:'installation' },
   { file:'breath.html',   emoji:'🫁', en:'Breath',           zh:'呼吸',         sub_en:'Kapoor · Void & Pulse',          sub_zh:'Anish Kapoor',         cat:'emotion' },
+  { file:'jianlai.html',  emoji:'⚔️', en:'Sword Scripture',  zh:'剑来·本命字', sub_en:'Confucian Text Duel · Twin Swords',sub_zh:'儒道双剑',           cat:'poetry' },
+  { file:'rainbook.html', emoji:'🌧️', en:'Rain Painting',    zh:'雨畫',         sub_en:'Ink Wash Dissolving in Rain',    sub_zh:'雨打丹青·墨随水散',    cat:'poetry' },
+  { file:'textris.html',  emoji:'🀄', en:'Text Tetris',      zh:'字陣',         sub_en:'Classical Poetry Tetris',        sub_zh:'以文為磚·落字成陣',    cat:'game' },
 ];
 
 let lang = localStorage.getItem('blossom-lang') || 'en';
@@ -156,6 +161,7 @@ function renderFilters() {
     { key:'poetry', label: t('filterPoetry') },
     { key:'emotion', label: t('filterEmotion') },
     { key:'installation', label: t('filterInstall') },
+    { key:'game', label: t('catGame') },
   ];
   filters.forEach(f => {
     const btn = document.createElement('button');
@@ -172,7 +178,7 @@ function renderFilters() {
 }
 
 function catLabel(cat) {
-  return { nature: t('catNature'), poetry: t('catPoetry'), emotion: t('catEmotion'), installation: t('catInstall') }[cat] || cat;
+  return { nature: t('catNature'), poetry: t('catPoetry'), emotion: t('catEmotion'), installation: t('catInstall'), game: t('catGame') }[cat] || cat;
 }
 
 function renderCards() {
