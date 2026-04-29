@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>蝴蝶钢琴 | Butterfly Piano</title>
+<title>万象钢琴 | Piano Fantasy</title>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -232,7 +232,8 @@ body {
 <a href="home.html" class="back-link">← 万象</a>
 <div class="counter" id="counter">🦋 0</div>
 
-<div class="title-area"><h1>蝴蝶钢琴</h1></div>
+<div class="title-area"><h1>万象钢琴</h1></div>
+<canvas id="particleCanvas" style="position:fixed;top:0;left:0;width:100%;height:100%;z-index:10;pointer-events:none;"></canvas>
 
 <div class="song-bar" id="songBar"></div>
 
@@ -353,7 +354,7 @@ allNotes.forEach(n => {
   key.addEventListener('touchend', doRelease);
 });
 
-let totalButterflies = 0;
+let totalParticles = 0;
 
 function pressKey(note, freq, vel) {
   const el = keyElements[note];
@@ -361,9 +362,10 @@ function pressKey(note, freq, vel) {
   if (el.classList.contains('active')) return;
   el.classList.add('active');
   playNote(freq, 0.6, vel || 0.7);
-  spawnButterfly(el);
-  totalButterflies++;
-  document.getElementById('counter').textContent = '🦋 ' + totalButterflies;
+  spawnParticle(el);
+  totalParticles++;
+  const icons = { canon:'✨', elise:'🦋', moonlight:'🌸', mariage:'🌹', castle:'🪲' };
+  document.getElementById('counter').textContent = (icons[currentSong]||'✨') + ' ' + totalParticles;
 }
 
 function releaseKey(note) {
@@ -373,132 +375,292 @@ function releaseKey(note) {
 }
 
 // ═══════════════════════════════════════
-//  Real Image Butterfly System
+//  Multi-type Particle System
+//  canon=stars, elise=butterflies, moonlight=petals,
+//  mariage=roses, castle=fireflies
 // ═══════════════════════════════════════
-const layer = document.getElementById('butterflyLayer');
-const liveButterflies = [];
+const pCanvas = document.getElementById('particleCanvas');
+const pCtx = pCanvas.getContext('2d');
+pCanvas.width = window.innerWidth;
+pCanvas.height = window.innerHeight;
+window.addEventListener('resize', () => { pCanvas.width = innerWidth; pCanvas.height = innerHeight; });
 
-function spawnButterfly(keyEl) {
+const layer = document.getElementById('butterflyLayer');
+const particles = [];  // canvas-drawn particles
+const domButterflies = [];  // DOM butterflies (elise)
+
+function spawnParticle(keyEl) {
   const r = keyEl.getBoundingClientRect();
   const x = r.left + r.width / 2;
   const y = r.top;
-
+  const type = SONGS[currentSong]?.particle || 'star';
   const count = Math.random() > 0.6 ? 2 : 1;
-  for (let i = 0; i < count; i++) {
-    createButterfly(x + (Math.random() - 0.5) * 30, y + (Math.random() - 0.5) * 15);
-  }
 
+  for (let i = 0; i < count; i++) {
+    const sx = x + (Math.random()-0.5)*30;
+    const sy = y + (Math.random()-0.5)*15;
+    if (type === 'butterfly') {
+      createDOMButterfly(sx, sy);
+    } else {
+      particles.push(createParticle(type, sx, sy));
+    }
+  }
   // Sparkle
   const sp = document.createElement('div');
   sp.className = 'sparkle';
-  const cols = ['#FFD700','#FF69B4','#00BFFF','#9370DB','#FF6347','#7FFFD4'];
-  sp.style.background = `radial-gradient(circle, ${cols[Math.floor(Math.random() * cols.length)]}88, transparent)`;
-  sp.style.left = (x - 8) + 'px';
-  sp.style.top = (y - 8) + 'px';
+  const cols = {star:['#FFD700','#FFF8DC','#87CEEB'],butterfly:['#FF69B4','#9370DB','#00BFFF'],petal:['#FFB7C5','#FFC0CB','#E8B4B8'],rose:['#FF2D55','#FF6B81','#C71585'],firefly:['#ADFF2F','#7FFF00','#FFD700']};
+  const c = (cols[type]||cols.star);
+  sp.style.background = `radial-gradient(circle, ${c[Math.floor(Math.random()*c.length)]}88, transparent)`;
+  sp.style.left = (x-8)+'px'; sp.style.top = (y-8)+'px';
   document.body.appendChild(sp);
   setTimeout(() => sp.remove(), 500);
 }
 
-function createButterfly(startX, startY) {
+function createParticle(type, x, y) {
+  const base = {
+    type, x, y,
+    vx: (Math.random()-0.5)*2,
+    vy: -(0.8 + Math.random()*2),
+    life: 1,
+    decay: 0.001 + Math.random()*0.001,
+    phase: Math.random()*Math.PI*2,
+    phaseSpeed: 0.02 + Math.random()*0.03,
+    rot: Math.random()*360,
+    rotSpeed: (Math.random()-0.5)*3,
+    turnTimer: 0,
+  };
+  if (type === 'star') {
+    base.size = 3 + Math.random()*5;
+    base.color = ['#FFD700','#FFF8DC','#87CEEB','#E6E6FA','#FFDAB9'][Math.floor(Math.random()*5)];
+    base.points = 4 + Math.floor(Math.random()*3); // 4-6 pointed star
+    base.twinkleSpeed = 0.05 + Math.random()*0.08;
+    base.decay = 0.0008 + Math.random()*0.0006;
+    // Stars drift upward with slight arcs
+    base.vy = -(1 + Math.random()*2.5);
+    base.vx = (Math.random()-0.5)*1.5;
+  } else if (type === 'petal') {
+    base.size = 8 + Math.random()*10;
+    base.color = ['#FFB7C5','#FFC0CB','#FADADD','#E8B4B8','#F4C2C2','#FFF0F5'][Math.floor(Math.random()*6)];
+    base.vy = -(0.3 + Math.random()*1); // slow drift
+    base.decay = 0.0006 + Math.random()*0.0005;
+    base.rotSpeed = (Math.random()-0.5)*2;
+    base.swayAmp = 1 + Math.random()*2; // side-to-side sway
+  } else if (type === 'rose') {
+    base.size = 6 + Math.random()*9;
+    base.color = ['#FF2D55','#FF6B81','#DC143C','#C71585','#FF69B4','#FF1493'][Math.floor(Math.random()*6)];
+    base.vy = -(0.5 + Math.random()*1.5);
+    base.decay = 0.0007 + Math.random()*0.0005;
+    base.rotSpeed = (Math.random()-0.5)*2.5;
+    base.swayAmp = 0.8 + Math.random()*1.5;
+    base.petalLayers = 2 + Math.floor(Math.random()*2);
+  } else if (type === 'firefly') {
+    base.size = 3 + Math.random()*4;
+    base.color = ['#ADFF2F','#7FFF00','#FFFF00','#FFD700','#00FF7F'][Math.floor(Math.random()*5)];
+    base.vy = -(0.3 + Math.random()*1.2);
+    base.vx = (Math.random()-0.5)*2;
+    base.decay = 0.0005 + Math.random()*0.0004;
+    base.glowPhase = Math.random()*Math.PI*2;
+    base.glowSpeed = 0.04 + Math.random()*0.06;
+    // Fireflies wander more randomly
+    base.wanderTimer = 0;
+    base.wanderInterval = 20 + Math.random()*40;
+  }
+  return base;
+}
+
+// DOM butterflies (for 致爱丽丝)
+function createDOMButterfly(sx, sy) {
   const imgIdx = Math.floor(Math.random() * BUTTERFLY_COUNT);
-  const size = 30 + Math.random() * 40; // 30-70px displayed size
+  const size = 30 + Math.random() * 40;
   const el = document.createElement('img');
   el.src = butterflyImages[imgIdx].src;
   el.className = 'butterfly';
   el.style.width = size + 'px';
   el.style.height = 'auto';
-
-  // Random initial rotation
-  const initRot = (Math.random() - 0.5) * 40;
-  el.style.setProperty('--rot', initRot + 'deg');
-
-  // Wing flap speed varies
-  const flapSpeed = 0.15 + Math.random() * 0.2;
-  el.style.animation = `wingFlap ${flapSpeed}s ease-in-out infinite`;
-
-  // Random hue shift for more color variety from same images
-  const hueShift = Math.floor(Math.random() * 360);
-  if (Math.random() > 0.5) {
-    el.style.filter = `drop-shadow(0 0 8px rgba(255,255,255,0.25)) hue-rotate(${hueShift}deg)`;
-  }
-
+  const initRot = (Math.random()-0.5)*40;
+  el.style.setProperty('--rot', initRot+'deg');
+  el.style.animation = `wingFlap ${0.15+Math.random()*0.2}s ease-in-out infinite`;
+  if (Math.random() > 0.5) el.style.filter = `drop-shadow(0 0 8px rgba(255,255,255,0.25)) hue-rotate(${Math.floor(Math.random()*360)}deg)`;
   layer.appendChild(el);
-
-  const b = {
-    el,
-    x: startX,
-    y: startY,
-    vx: (Math.random() - 0.5) * 2,
-    vy: -(1 + Math.random() * 2), // fly upward
-    wobblePhase: Math.random() * Math.PI * 2,
-    wobbleSpeed: 0.015 + Math.random() * 0.025,
-    wobbleAmp: 0.5 + Math.random() * 1,
-    rotSpeed: (Math.random() - 0.5) * 0.5,
-    rot: initRot,
-    life: 1,
-    decay: 0.0008 + Math.random() * 0.0008,
-    size,
-    turnTimer: 0,
-    targetVx: (Math.random() - 0.5) * 2,
-    targetVy: -(0.5 + Math.random() * 1.5),
-  };
-
-  liveButterflies.push(b);
+  domButterflies.push({
+    el, x:sx, y:sy, vx:(Math.random()-0.5)*2, vy:-(1+Math.random()*2),
+    wobblePhase:Math.random()*Math.PI*2, wobbleSpeed:0.015+Math.random()*0.025,
+    wobbleAmp:0.5+Math.random(), rotSpeed:(Math.random()-0.5)*0.5,
+    rot:initRot, life:1, decay:0.0008+Math.random()*0.0008, size,
+    turnTimer:0, targetVx:(Math.random()-0.5)*2, targetVy:-(0.5+Math.random()*1.5),
+  });
 }
 
-function updateButterflies() {
-  const W = window.innerWidth;
-  const H = window.innerHeight;
+// Canvas particle drawing
+function drawStar(ctx, x, y, r, points, rot) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(rot * Math.PI/180);
+  ctx.beginPath();
+  for (let i = 0; i < points*2; i++) {
+    const rad = i % 2 === 0 ? r : r * 0.4;
+    const a = (i * Math.PI / points) - Math.PI/2;
+    if (i === 0) ctx.moveTo(Math.cos(a)*rad, Math.sin(a)*rad);
+    else ctx.lineTo(Math.cos(a)*rad, Math.sin(a)*rad);
+  }
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
 
-  for (let i = liveButterflies.length - 1; i >= 0; i--) {
-    const b = liveButterflies[i];
+function drawPetal(ctx, x, y, size, rot, color) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(rot * Math.PI/180);
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(0, -size*0.6);
+  ctx.bezierCurveTo(size*0.5, -size*0.4, size*0.4, size*0.3, 0, size*0.6);
+  ctx.bezierCurveTo(-size*0.4, size*0.3, -size*0.5, -size*0.4, 0, -size*0.6);
+  ctx.fill();
+  // Vein
+  ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+  ctx.lineWidth = 0.5;
+  ctx.beginPath();
+  ctx.moveTo(0, -size*0.5);
+  ctx.lineTo(0, size*0.5);
+  ctx.stroke();
+  ctx.restore();
+}
 
+function drawRose(ctx, x, y, size, rot, color, layers) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(rot * Math.PI/180);
+  for (let l = layers; l >= 0; l--) {
+    const s = size * (0.5 + l*0.25);
+    const alpha = 0.6 + l * 0.1;
+    ctx.fillStyle = color;
+    ctx.globalAlpha *= alpha;
+    for (let i = 0; i < 5; i++) {
+      ctx.save();
+      ctx.rotate((i * 72 + l * 15) * Math.PI/180);
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.bezierCurveTo(s*0.3, -s*0.4, s*0.5, -s*0.1, 0, s*0.3);
+      ctx.bezierCurveTo(-s*0.5, -s*0.1, -s*0.3, -s*0.4, 0, 0);
+      ctx.fill();
+      ctx.restore();
+    }
+  }
+  ctx.restore();
+}
+
+function drawFirefly(ctx, x, y, size, glowIntensity, color) {
+  // Outer glow
+  const grad = ctx.createRadialGradient(x, y, 0, x, y, size*4);
+  grad.addColorStop(0, color + 'CC');
+  grad.addColorStop(0.3, color + '44');
+  grad.addColorStop(1, 'transparent');
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.arc(x, y, size*4*glowIntensity, 0, Math.PI*2);
+  ctx.fill();
+  // Core
+  ctx.fillStyle = '#FFFFFF';
+  ctx.beginPath();
+  ctx.arc(x, y, size*0.6, 0, Math.PI*2);
+  ctx.fill();
+  // Body (tiny dark spec above)
+  ctx.fillStyle = 'rgba(50,50,50,0.5)';
+  ctx.beginPath();
+  ctx.ellipse(x, y - size*1.2, size*0.4, size*0.8, 0, 0, Math.PI*2);
+  ctx.fill();
+}
+
+function updateParticles() {
+  pCtx.clearRect(0, 0, pCanvas.width, pCanvas.height);
+  const W = pCanvas.width, H = pCanvas.height;
+
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.phase += p.phaseSpeed;
+    p.rot += p.rotSpeed;
+    p.life -= p.decay;
+    p.turnTimer++;
+
+    if (p.type === 'star') {
+      p.x += p.vx + Math.sin(p.phase)*0.5;
+      p.y += p.vy;
+      const twinkle = 0.5 + Math.sin(p.phase * 3)*0.5;
+      pCtx.globalAlpha = p.life * twinkle;
+      pCtx.fillStyle = p.color;
+      pCtx.shadowColor = p.color;
+      pCtx.shadowBlur = 10;
+      drawStar(pCtx, p.x, p.y, p.size, p.points, p.rot);
+      pCtx.shadowBlur = 0;
+    } else if (p.type === 'petal') {
+      p.x += p.vx + Math.sin(p.phase) * p.swayAmp;
+      p.y += p.vy + Math.cos(p.phase*0.7) * 0.3;
+      pCtx.globalAlpha = p.life;
+      drawPetal(pCtx, p.x, p.y, p.size, p.rot, p.color);
+    } else if (p.type === 'rose') {
+      p.x += p.vx + Math.sin(p.phase) * p.swayAmp;
+      p.y += p.vy + Math.cos(p.phase*0.8) * 0.2;
+      pCtx.globalAlpha = p.life;
+      drawRose(pCtx, p.x, p.y, p.size, p.rot, p.color, p.petalLayers);
+    } else if (p.type === 'firefly') {
+      p.glowPhase += p.glowSpeed;
+      p.wanderTimer++;
+      if (p.wanderTimer > p.wanderInterval) {
+        p.vx += (Math.random()-0.5)*1.5;
+        p.vy += (Math.random()-0.5)*1 - 0.3;
+        p.vx = Math.max(-2, Math.min(2, p.vx));
+        p.vy = Math.max(-2.5, Math.min(0.5, p.vy));
+        p.wanderTimer = 0;
+      }
+      p.x += p.vx + Math.sin(p.phase)*0.8;
+      p.y += p.vy + Math.cos(p.phase*1.5)*0.5;
+      const glow = 0.4 + Math.sin(p.glowPhase)*0.6;
+      pCtx.globalAlpha = p.life * Math.max(0.2, glow);
+      drawFirefly(pCtx, p.x, p.y, p.size, Math.max(0.3,glow), p.color);
+    }
+
+    pCtx.globalAlpha = 1;
+
+    // Wrap/remove
+    if (p.x < -60) p.x = W + 60;
+    if (p.x > W + 60) p.x = -60;
+    if (p.life <= 0 || p.y < -80) particles.splice(i, 1);
+  }
+
+  // Update DOM butterflies
+  for (let i = domButterflies.length - 1; i >= 0; i--) {
+    const b = domButterflies[i];
     b.wobblePhase += b.wobbleSpeed;
     b.turnTimer++;
-
-    // Change direction occasionally
-    if (b.turnTimer > 40 + Math.random() * 80) {
-      b.targetVx = (Math.random() - 0.5) * 3;
-      b.targetVy = -(0.3 + Math.random() * 1.8);
-      if (b.y < H * 0.2) b.targetVy = 0.5 + Math.random();
-      if (b.x < 50) b.targetVx = Math.abs(b.targetVx);
-      if (b.x > W - 50) b.targetVx = -Math.abs(b.targetVx);
+    if (b.turnTimer > 40 + Math.random()*80) {
+      b.targetVx = (Math.random()-0.5)*3;
+      b.targetVy = -(0.3+Math.random()*1.8);
+      if (b.y < H*0.2) b.targetVy = 0.5+Math.random();
       b.turnTimer = 0;
     }
-
-    // Smooth steering
-    b.vx += (b.targetVx - b.vx) * 0.02;
-    b.vy += (b.targetVy - b.vy) * 0.02;
-
-    // Wobble
-    b.x += b.vx + Math.sin(b.wobblePhase) * b.wobbleAmp;
-    b.y += b.vy + Math.cos(b.wobblePhase * 1.3) * b.wobbleAmp * 0.5;
-
-    // Gentle rotation based on movement direction
-    b.rot += b.rotSpeed + Math.sin(b.wobblePhase * 0.7) * 0.3;
-
+    b.vx += (b.targetVx - b.vx)*0.02;
+    b.vy += (b.targetVy - b.vy)*0.02;
+    b.x += b.vx + Math.sin(b.wobblePhase)*b.wobbleAmp;
+    b.y += b.vy + Math.cos(b.wobblePhase*1.3)*b.wobbleAmp*0.5;
+    b.rot += b.rotSpeed + Math.sin(b.wobblePhase*0.7)*0.3;
     b.life -= b.decay;
-
-    // Wrap horizontally
-    if (b.x < -80) b.x = W + 80;
-    if (b.x > W + 80) b.x = -80;
-
-    // Update DOM
-    b.el.style.left = (b.x - b.size / 2) + 'px';
-    b.el.style.top = (b.y - b.size / 2) + 'px';
-    b.el.style.setProperty('--rot', b.rot + 'deg');
+    if (b.x < -80) b.x = W+80;
+    if (b.x > W+80) b.x = -80;
+    b.el.style.left = (b.x-b.size/2)+'px';
+    b.el.style.top = (b.y-b.size/2)+'px';
+    b.el.style.setProperty('--rot', b.rot+'deg');
     b.el.style.opacity = Math.min(b.life, 1);
-
-    // Remove dead butterflies
     if (b.life <= 0 || b.y < -100) {
       b.el.remove();
-      liveButterflies.splice(i, 1);
+      domButterflies.splice(i, 1);
     }
   }
 
-  requestAnimationFrame(updateButterflies);
+  requestAnimationFrame(updateParticles);
 }
-updateButterflies();
+updateParticles();
 
 // ═══════════════════════════════════════
 //  Star Background
@@ -547,7 +709,8 @@ const SONGS = {
     name: '卡农',
     nameEn: "Pachelbel's Canon in D",
     composer: 'Johann Pachelbel',
-    bpm: 68,
+    bpm: 90,
+    particle: 'star',
     // Accurate Canon in D right hand melody
     notes: [
       // Theme (half notes)
@@ -588,7 +751,8 @@ const SONGS = {
     name: '致爱丽丝',
     nameEn: 'Für Elise',
     composer: 'Ludwig van Beethoven',
-    bpm: 140, // 3/8 time, eighth note pulse
+    bpm: 170, // 3/8 time, eighth note pulse
+    particle: 'butterfly',
     // WoO 59 accurate right hand
     notes: [
       // A section
@@ -634,7 +798,8 @@ const SONGS = {
     name: '月光奏鸣曲',
     nameEn: 'Moonlight Sonata',
     composer: 'Ludwig van Beethoven',
-    bpm: 54, // Adagio sostenuto
+    bpm: 72, // Adagio sostenuto (slightly faster)
+    particle: 'petal',
     // Op.27 No.2 Mvt.1 - triplet arpeggios with melody
     notes: [
       // m1-2: C#m arpeggio
@@ -696,7 +861,8 @@ const SONGS = {
     name: '梦中的婚礼',
     nameEn: "Mariage d'Amour",
     composer: 'Paul de Senneville',
-    bpm: 70,
+    bpm: 88,
+    particle: 'rose',
     // Accurate right hand melody
     notes: [
       // Intro pickup
@@ -738,7 +904,8 @@ const SONGS = {
     name: '天空之城',
     nameEn: 'Castle in the Sky',
     composer: '久石讓 Joe Hisaishi',
-    bpm: 86,
+    bpm: 100,
+    particle: 'firefly',
     // 「君をのせて」accurate melody
     notes: [
       // Verse 1
@@ -784,7 +951,8 @@ let currentSong = null;
 Object.entries(SONGS).forEach(([key, song]) => {
   const btn = document.createElement('button');
   btn.className = 'song-btn';
-  btn.textContent = song.name;
+  const emoji = { canon:'✨', elise:'🦋', moonlight:'🌸', mariage:'🌹', castle:'🪲' };
+  btn.textContent = (emoji[key]||'') + ' ' + song.name;
   btn.dataset.key = key;
   btn.addEventListener('click', () => {
     selectSongAndPlay(key);
