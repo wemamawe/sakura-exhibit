@@ -1,0 +1,865 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>蝴蝶钢琴 | Butterfly Piano</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: #0a0a2e;
+  height: 100vh;
+  overflow: hidden;
+  font-family: -apple-system, 'PingFang SC', 'Segoe UI', sans-serif;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  user-select: none;
+}
+
+/* Background gradient animated */
+.bg {
+  position: fixed;
+  top: 0; left: 0; width: 100%; height: 100%;
+  background: linear-gradient(180deg, #0a0a2e 0%, #141440 30%, #1e1050 60%, #2a1545 100%);
+  z-index: 0;
+}
+
+#star-canvas {
+  position: fixed; top: 0; left: 0;
+  width: 100%; height: 100%;
+  z-index: 1; pointer-events: none;
+}
+
+#butterfly-canvas {
+  position: fixed; top: 0; left: 0;
+  width: 100%; height: 100%;
+  pointer-events: none; z-index: 10;
+}
+
+/* Title */
+.title-area {
+  position: fixed;
+  top: 25px; left: 0; width: 100%;
+  text-align: center; z-index: 20;
+  pointer-events: none;
+}
+.title-area h1 {
+  font-size: 28px;
+  font-weight: 300;
+  letter-spacing: 12px;
+  color: rgba(255,255,255,0.12);
+}
+
+/* Song selector */
+.song-bar {
+  position: fixed;
+  top: 80px; left: 50%;
+  transform: translateX(-50%);
+  z-index: 30;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+  max-width: 90vw;
+}
+.song-btn {
+  padding: 8px 20px;
+  background: rgba(255,255,255,0.06);
+  color: rgba(255,255,255,0.55);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 20px;
+  font-size: 13px;
+  cursor: pointer;
+  backdrop-filter: blur(10px);
+  transition: all 0.3s;
+  letter-spacing: 1px;
+  white-space: nowrap;
+}
+.song-btn:hover {
+  background: rgba(255,255,255,0.12);
+  color: rgba(255,255,255,0.8);
+  border-color: rgba(255,255,255,0.3);
+}
+.song-btn.active {
+  background: linear-gradient(135deg, rgba(147,112,219,0.5), rgba(100,149,237,0.5));
+  color: #fff;
+  border-color: rgba(147,112,219,0.6);
+  box-shadow: 0 4px 15px rgba(147,112,219,0.3);
+}
+
+/* Controls */
+.controls {
+  position: fixed;
+  bottom: 255px;
+  z-index: 30;
+  display: flex;
+  gap: 15px;
+  align-items: center;
+}
+.ctrl-btn {
+  padding: 10px 28px;
+  background: rgba(255,255,255,0.08);
+  color: rgba(255,255,255,0.7);
+  border: 1px solid rgba(255,255,255,0.18);
+  border-radius: 25px;
+  font-size: 14px;
+  cursor: pointer;
+  backdrop-filter: blur(10px);
+  transition: all 0.3s;
+  letter-spacing: 2px;
+}
+.ctrl-btn:hover {
+  background: rgba(255,255,255,0.15);
+  color: #fff;
+}
+.ctrl-btn.playing {
+  background: linear-gradient(135deg, rgba(147,112,219,0.45), rgba(100,149,237,0.45));
+  border-color: rgba(147,112,219,0.6);
+  color: #fff;
+}
+
+/* Song info */
+.song-info {
+  position: fixed;
+  bottom: 290px;
+  z-index: 30;
+  text-align: center;
+  pointer-events: none;
+  transition: opacity 0.5s;
+}
+.song-info .name {
+  font-size: 18px;
+  color: rgba(255,255,255,0.6);
+  letter-spacing: 4px;
+  font-weight: 300;
+}
+.song-info .composer {
+  font-size: 12px;
+  color: rgba(255,255,255,0.3);
+  letter-spacing: 2px;
+  margin-top: 4px;
+}
+
+/* Piano */
+.piano-container {
+  position: relative;
+  z-index: 20;
+  display: flex;
+  margin-bottom: 30px;
+  filter: drop-shadow(0 10px 30px rgba(0,0,0,0.5));
+}
+.key {
+  position: relative;
+  cursor: pointer;
+  transition: background 0.06s, transform 0.06s, box-shadow 0.06s;
+}
+.white-key {
+  width: 44px;
+  height: 180px;
+  background: linear-gradient(180deg, #fafafa 0%, #f0f0f0 80%, #ddd 100%);
+  border: 1px solid #aaa;
+  border-radius: 0 0 5px 5px;
+  margin: 0 0.5px;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.25), inset 0 -2px 3px rgba(0,0,0,0.08);
+}
+.white-key.active {
+  background: linear-gradient(180deg, #e0d8f8 0%, #c8b8f0 80%, #a890d8 100%);
+  transform: translateY(2px);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+}
+.black-key {
+  position: absolute;
+  width: 28px;
+  height: 115px;
+  background: linear-gradient(180deg, #444 0%, #1a1a1a 100%);
+  border-radius: 0 0 3px 3px;
+  z-index: 25;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.4), inset 0 -2px 4px rgba(0,0,0,0.3);
+}
+.black-key.active {
+  background: linear-gradient(180deg, #6a4d8a 0%, #2a1a4a 100%);
+  transform: translateY(1px);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.4);
+}
+
+/* Sparkle */
+@keyframes sparkle {
+  0% { transform: scale(0) rotate(0deg); opacity: 1; }
+  100% { transform: scale(2.5) rotate(180deg); opacity: 0; }
+}
+.sparkle {
+  position: fixed;
+  width: 16px; height: 16px;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 15;
+  animation: sparkle 0.5s ease-out forwards;
+}
+
+/* Back link */
+.back-link {
+  position: fixed;
+  top: 20px; left: 20px;
+  z-index: 50;
+  color: rgba(255,255,255,0.3);
+  text-decoration: none;
+  font-size: 14px;
+  transition: color 0.3s;
+  letter-spacing: 1px;
+}
+.back-link:hover { color: rgba(255,255,255,0.7); }
+
+/* Butterfly counter */
+.counter {
+  position: fixed;
+  top: 25px; right: 20px;
+  z-index: 50;
+  color: rgba(255,255,255,0.2);
+  font-size: 12px;
+  letter-spacing: 1px;
+}
+
+/* Mobile adjustments */
+@media (max-width: 768px) {
+  .white-key { width: 28px; height: 140px; }
+  .black-key { width: 18px; height: 90px; }
+  .song-bar { top: 60px; gap: 6px; }
+  .song-btn { padding: 6px 12px; font-size: 11px; }
+  .title-area h1 { font-size: 20px; letter-spacing: 6px; }
+  .controls { bottom: 195px; }
+  .song-info { bottom: 225px; }
+  .piano-container { margin-bottom: 20px; }
+}
+</style>
+</head>
+<body>
+
+<div class="bg"></div>
+<canvas id="star-canvas"></canvas>
+<canvas id="butterfly-canvas"></canvas>
+
+<a href="home.html" class="back-link">← 万象</a>
+<div class="counter" id="counter">🦋 0</div>
+
+<div class="title-area"><h1>蝴蝶钢琴</h1></div>
+
+<div class="song-bar" id="songBar"></div>
+
+<div class="song-info" id="songInfo">
+  <div class="name" id="songName">选择一首曲子</div>
+  <div class="composer" id="songComposer"></div>
+</div>
+
+<div class="controls">
+  <button class="ctrl-btn" id="playBtn" onclick="togglePlay()">▶ 演奏</button>
+</div>
+
+<div class="piano-container" id="piano"></div>
+
+<script>
+// ═══════════════════════════════════════
+//  Audio Engine
+// ═══════════════════════════════════════
+let audioCtx = null;
+function ensureAudio() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+}
+
+// Improved piano synth with harmonics
+function playNote(freq, duration = 0.5, velocity = 0.7) {
+  ensureAudio();
+  const now = audioCtx.currentTime;
+  const master = audioCtx.createGain();
+  master.gain.value = 0;
+  master.connect(audioCtx.destination);
+
+  // Fundamental + harmonics for richer piano tone
+  const harmonics = [
+    { ratio: 1, amp: 0.35, type: 'triangle' },
+    { ratio: 2, amp: 0.12, type: 'sine' },
+    { ratio: 3, amp: 0.05, type: 'sine' },
+    { ratio: 4, amp: 0.02, type: 'sine' },
+  ];
+
+  harmonics.forEach(h => {
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = h.type;
+    osc.frequency.value = freq * h.ratio;
+    gain.gain.setValueAtTime(0, now);
+    gain.gain.linearRampToValueAtTime(h.amp * velocity, now + 0.008);
+    gain.gain.exponentialRampToValueAtTime(h.amp * velocity * 0.4, now + 0.08);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+    osc.connect(gain);
+    gain.connect(master);
+    osc.start(now);
+    osc.stop(now + duration + 0.05);
+  });
+
+  // Envelope
+  master.gain.setValueAtTime(0, now);
+  master.gain.linearRampToValueAtTime(1, now + 0.005);
+  master.gain.setValueAtTime(1, now + duration * 0.3);
+  master.gain.exponentialRampToValueAtTime(0.001, now + duration);
+}
+
+// ═══════════════════════════════════════
+//  Piano Keyboard (3 octaves: C4 to B6)
+// ═══════════════════════════════════════
+const allNotes = [];
+const noteNames = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+// Build notes from C3 to B6
+for (let oct = 3; oct <= 6; oct++) {
+  noteNames.forEach(n => {
+    const midi = 12 + (oct + 1) * 12 + noteNames.indexOf(n);  
+    const freq = 440 * Math.pow(2, (midi - 69) / 12);
+    allNotes.push({
+      note: n + oct,
+      freq: freq,
+      type: n.includes('#') ? 'black' : 'white'
+    });
+  });
+}
+
+// Frequency lookup
+const noteFreqs = {};
+allNotes.forEach(n => noteFreqs[n.note] = n.freq);
+
+const pianoEl = document.getElementById('piano');
+const keyElements = {};
+let whiteCount = 0;
+
+allNotes.forEach(n => {
+  const key = document.createElement('div');
+  key.className = `key ${n.type}-key`;
+  key.dataset.note = n.note;
+
+  if (n.type === 'white') {
+    key.style.position = 'relative';
+    pianoEl.appendChild(key);
+    whiteCount++;
+  } else {
+    const isMobile = window.innerWidth <= 768;
+    const kw = isMobile ? 29 : 45;
+    const offset = whiteCount * kw - (isMobile ? 9 : 14);
+    key.style.left = offset + 'px';
+    key.style.top = '0';
+    pianoEl.appendChild(key);
+  }
+
+  keyElements[n.note] = key;
+
+  // Touch/click
+  const doPress = (e) => { e.preventDefault(); pressKey(n.note, n.freq); };
+  const doRelease = () => releaseKey(n.note);
+  key.addEventListener('mousedown', doPress);
+  key.addEventListener('mouseup', doRelease);
+  key.addEventListener('mouseleave', doRelease);
+  key.addEventListener('touchstart', doPress, { passive: false });
+  key.addEventListener('touchend', doRelease);
+});
+
+function pressKey(note, freq, vel) {
+  const el = keyElements[note];
+  if (!el) return;
+  if (el.classList.contains('active')) return;
+  el.classList.add('active');
+  playNote(freq, 0.6, vel || 0.7);
+  spawnButterfly(el);
+  totalButterflies++;
+  document.getElementById('counter').textContent = '🦋 ' + totalButterflies;
+}
+
+function releaseKey(note) {
+  const el = keyElements[note];
+  if (!el) return;
+  el.classList.remove('active');
+}
+
+// ═══════════════════════════════════════
+//  Butterfly System
+// ═══════════════════════════════════════
+const bCanvas = document.getElementById('butterfly-canvas');
+const bCtx = bCanvas.getContext('2d');
+let totalButterflies = 0;
+
+function resizeCanvas() {
+  bCanvas.width = window.innerWidth;
+  bCanvas.height = window.innerHeight;
+}
+resizeCanvas();
+window.addEventListener('resize', resizeCanvas);
+
+const butterflies = [];
+
+const species = [
+  { name: '蓝闪蝶', colors: ['#1E90FF','#00BFFF','#4169E1','#87CEEB'], shape: 'round' },
+  { name: '帝王蝶', colors: ['#FF8C00','#FF6347','#FFD700','#B8860B'], shape: 'pointed' },
+  { name: '凤蝶',   colors: ['#FFD700','#222','#FF4500','#FFDAB9'], shape: 'tail' },
+  { name: '粉蝶',   colors: ['#FF69B4','#FFB6C1','#FF1493','#FFF0F5'], shape: 'round' },
+  { name: '紫斑蝶', colors: ['#9370DB','#8A2BE2','#DDA0DD','#4B0082'], shape: 'pointed' },
+  { name: '翠蝶',   colors: ['#00FA9A','#2E8B57','#98FB98','#006400'], shape: 'round' },
+  { name: '琉璃蝶', colors: ['#00CED1','#20B2AA','#48D1CC','#008B8B'], shape: 'tail' },
+  { name: '玫瑰蝶', colors: ['#DC143C','#FF6B81','#C71585','#FFE4E1'], shape: 'round' },
+  { name: '月光蝶', colors: ['#E6E6FA','#B0C4DE','#F0F8FF','#708090'], shape: 'pointed' },
+  { name: '火焰蝶', colors: ['#FF4500','#FF0000','#FFD700','#FF8C00'], shape: 'tail' },
+  { name: '极光蝶', colors: ['#7FFFD4','#00FF7F','#FF69B4','#BA55D3'], shape: 'round' },
+  { name: '星尘蝶', colors: ['#FFD700','#FFF8DC','#FFFACD','#DAA520'], shape: 'pointed' },
+];
+
+class Butterfly {
+  constructor(x, y) {
+    this.x = x; this.y = y;
+    const sp = species[Math.floor(Math.random() * species.length)];
+    this.colors = sp.colors;
+    this.shape = sp.shape;
+    this.size = 10 + Math.random() * 14;
+    this.wingAngle = Math.random() * Math.PI * 2;
+    this.wingSpeed = 0.07 + Math.random() * 0.05;
+    this.angle = -Math.PI / 2 + (Math.random() - 0.5) * 1.5;
+    this.speed = 0.4 + Math.random() * 1.0;
+    this.wobble = Math.random() * Math.PI * 2;
+    this.wobbleSpeed = 0.015 + Math.random() * 0.025;
+    this.life = 1;
+    this.decay = 0.0002 + Math.random() * 0.0003;
+    this.targetAngle = this.angle;
+    this.turnTimer = 0;
+    this.glow = 0.3 + Math.random() * 0.4;
+    this.dots = Array.from({ length: 3 }, () => ({
+      x: (Math.random() - 0.5) * 0.5,
+      y: (Math.random() - 0.3) * 0.5,
+      r: 0.06 + Math.random() * 0.1,
+      c: sp.colors[Math.floor(Math.random() * sp.colors.length)]
+    }));
+    this.trail = [];
+  }
+
+  update() {
+    this.wingAngle += this.wingSpeed;
+    this.wobble += this.wobbleSpeed;
+    this.turnTimer++;
+    if (this.turnTimer > 50 + Math.random() * 100) {
+      this.targetAngle += (Math.random() - 0.5) * 2;
+      if (this.y > bCanvas.height * 0.6) this.targetAngle = -Math.PI / 2 + (Math.random() - 0.5) * 1.2;
+      if (this.y < 50) this.targetAngle = Math.PI / 4;
+      this.turnTimer = 0;
+    }
+    this.angle += (this.targetAngle - this.angle) * 0.025;
+    this.x += Math.cos(this.angle) * this.speed + Math.sin(this.wobble) * 0.6;
+    this.y += Math.sin(this.angle) * this.speed + Math.cos(this.wobble * 1.3) * 0.4 - 0.25;
+    if (this.x < -60) this.x = bCanvas.width + 60;
+    if (this.x > bCanvas.width + 60) this.x = -60;
+    if (this.y < -60) this.targetAngle = Math.PI / 3;
+    this.life -= this.decay;
+    this.trail.push({ x: this.x, y: this.y, a: 0.25 });
+    if (this.trail.length > 12) this.trail.shift();
+    this.trail.forEach(t => t.a *= 0.9);
+  }
+
+  draw(ctx) {
+    const wing = Math.sin(this.wingAngle) * 0.85;
+    const s = this.size;
+    ctx.save();
+    ctx.translate(this.x, this.y);
+    ctx.rotate(this.angle + Math.PI / 2);
+    ctx.globalAlpha = Math.min(this.life, 1);
+    ctx.shadowColor = this.colors[0];
+    ctx.shadowBlur = 12 * this.glow;
+
+    // Trail
+    this.trail.forEach(t => {
+      ctx.save();
+      ctx.globalAlpha = t.a * this.life;
+      ctx.fillStyle = this.colors[2];
+      ctx.beginPath();
+      ctx.arc(t.x - this.x, t.y - this.y, 1.2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    });
+
+    // Wings
+    for (let side = -1; side <= 1; side += 2) {
+      ctx.save();
+      ctx.scale(side * wing, 1);
+      const grad = ctx.createRadialGradient(0, -s * 0.1, 0, 0, -s * 0.1, s * 0.7);
+      grad.addColorStop(0, this.colors[0]);
+      grad.addColorStop(0.5, this.colors[1]);
+      grad.addColorStop(1, this.colors[2]);
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      if (this.shape === 'round') {
+        ctx.moveTo(0, -s * 0.3);
+        ctx.bezierCurveTo(s * 0.6, -s * 0.8, s * 0.8, -s * 0.15, s * 0.1, s * 0.1);
+        ctx.bezierCurveTo(s * 0.65, s * 0.4, s * 0.35, s * 0.6, 0, s * 0.3);
+      } else if (this.shape === 'pointed') {
+        ctx.moveTo(0, -s * 0.3);
+        ctx.bezierCurveTo(s * 0.5, -s * 0.9, s * 0.9, -s * 0.35, s * 0.12, s * 0.05);
+        ctx.bezierCurveTo(s * 0.55, s * 0.3, s * 0.25, s * 0.65, 0, s * 0.35);
+      } else {
+        ctx.moveTo(0, -s * 0.3);
+        ctx.bezierCurveTo(s * 0.5, -s * 0.85, s * 0.85, -s * 0.25, s * 0.1, s * 0.1);
+        ctx.bezierCurveTo(s * 0.55, s * 0.3, s * 0.45, s * 0.75, s * 0.12, s * 0.55);
+        ctx.bezierCurveTo(s * 0.15, s * 0.45, 0.04, s * 0.38, 0, s * 0.35);
+      }
+      ctx.fill();
+      // Dots
+      this.dots.forEach(d => {
+        ctx.globalAlpha *= 0.5;
+        ctx.fillStyle = d.c;
+        ctx.beginPath();
+        ctx.arc(d.x * s, d.y * s, d.r * s, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha /= 0.5;
+      });
+      ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+      ctx.lineWidth = 0.4;
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // Body
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = '#222';
+    ctx.beginPath();
+    ctx.ellipse(0, 0, s * 0.05, s * 0.32, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Antennae
+    ctx.strokeStyle = '#555';
+    ctx.lineWidth = 0.8;
+    ctx.beginPath();
+    ctx.moveTo(0, -s * 0.28);
+    ctx.quadraticCurveTo(-s * 0.12, -s * 0.5, -s * 0.18, -s * 0.55);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(0, -s * 0.28);
+    ctx.quadraticCurveTo(s * 0.12, -s * 0.5, s * 0.18, -s * 0.55);
+    ctx.stroke();
+
+    ctx.fillStyle = this.colors[0];
+    ctx.beginPath();
+    ctx.arc(-s * 0.18, -s * 0.55, 1.5, 0, Math.PI * 2);
+    ctx.arc(s * 0.18, -s * 0.55, 1.5, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.restore();
+  }
+}
+
+function spawnButterfly(keyEl) {
+  const r = keyEl.getBoundingClientRect();
+  const x = r.left + r.width / 2;
+  const y = r.top;
+  const count = Math.random() > 0.5 ? 2 : 1;
+  for (let i = 0; i < count; i++) {
+    butterflies.push(new Butterfly(x + (Math.random() - 0.5) * 25, y + (Math.random() - 0.5) * 15));
+  }
+  // Sparkle
+  const sp = document.createElement('div');
+  sp.className = 'sparkle';
+  const cols = ['#FFD700','#FF69B4','#00BFFF','#9370DB','#FF6347','#7FFFD4'];
+  sp.style.background = `radial-gradient(circle, ${cols[Math.floor(Math.random() * cols.length)]}88, transparent)`;
+  sp.style.left = (x - 8) + 'px';
+  sp.style.top = (y - 8) + 'px';
+  document.body.appendChild(sp);
+  setTimeout(() => sp.remove(), 500);
+}
+
+// Animation
+function animateButterflies() {
+  bCtx.clearRect(0, 0, bCanvas.width, bCanvas.height);
+  for (let i = butterflies.length - 1; i >= 0; i--) {
+    butterflies[i].update();
+    butterflies[i].draw(bCtx);
+    if (butterflies[i].life <= 0) butterflies.splice(i, 1);
+  }
+  requestAnimationFrame(animateButterflies);
+}
+animateButterflies();
+
+// ═══════════════════════════════════════
+//  Star Background
+// ═══════════════════════════════════════
+const sCanvas = document.getElementById('star-canvas');
+const sCtx = sCanvas.getContext('2d');
+sCanvas.width = window.innerWidth;
+sCanvas.height = window.innerHeight;
+
+const stars = [];
+for (let i = 0; i < 200; i++) {
+  stars.push({
+    x: Math.random() * sCanvas.width,
+    y: Math.random() * sCanvas.height * 0.75,
+    r: Math.random() * 1.8,
+    base: 0.2 + Math.random() * 0.6,
+    phase: Math.random() * Math.PI * 2,
+    speed: 0.005 + Math.random() * 0.02,
+  });
+}
+
+function animateStars() {
+  sCtx.clearRect(0, 0, sCanvas.width, sCanvas.height);
+  stars.forEach(s => {
+    s.phase += s.speed;
+    const alpha = s.base + Math.sin(s.phase) * 0.3;
+    sCtx.fillStyle = `rgba(255,255,255,${Math.max(0, alpha)})`;
+    sCtx.beginPath();
+    sCtx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+    sCtx.fill();
+  });
+  requestAnimationFrame(animateStars);
+}
+animateStars();
+
+window.addEventListener('resize', () => {
+  sCanvas.width = window.innerWidth;
+  sCanvas.height = window.innerHeight;
+});
+
+// ═══════════════════════════════════════
+//  Famous Piano Pieces (simplified)
+//  Using note name + octave + duration
+// ═══════════════════════════════════════
+
+// Helper: r = rest
+const R = { note: 'REST', dur: 0 };
+
+const SONGS = {
+  canon: {
+    name: '卡农',
+    nameEn: "Pachelbel's Canon",
+    composer: 'Johann Pachelbel',
+    bpm: 72,
+    // Canon in D – right hand melody (simplified)
+    notes: [
+      // Theme entrance
+      {n:'F#5',d:1},{n:'E5',d:1},{n:'D5',d:1},{n:'C#5',d:1},
+      {n:'B4',d:1},{n:'A4',d:1},{n:'B4',d:1},{n:'C#5',d:1},
+      // Variation 1
+      {n:'D5',d:1},{n:'C#5',d:0.5},{n:'D5',d:0.5},{n:'E5',d:1},{n:'A4',d:0.5},{n:'B4',d:0.5},
+      {n:'C#5',d:0.5},{n:'A4',d:0.5},{n:'B4',d:0.5},{n:'G4',d:0.5},{n:'A4',d:1},{n:'F#4',d:0.5},{n:'G4',d:0.5},
+      {n:'A4',d:0.5},{n:'F#4',d:0.5},{n:'D4',d:0.5},{n:'E4',d:0.5},{n:'F#4',d:0.5},{n:'G4',d:0.5},{n:'A4',d:0.5},{n:'B4',d:0.5},
+      // Variation 2  
+      {n:'G4',d:0.5},{n:'F#4',d:0.5},{n:'E4',d:0.5},{n:'G4',d:0.5},{n:'F#4',d:0.5},{n:'E4',d:0.5},{n:'D4',d:0.5},{n:'C#4',d:0.5},
+      {n:'B3',d:0.5},{n:'D4',d:0.5},{n:'C#4',d:0.5},{n:'E4',d:0.5},{n:'D4',d:0.5},{n:'F#4',d:0.5},{n:'A4',d:0.5},{n:'G4',d:0.5},
+      {n:'F#4',d:0.5},{n:'D4',d:0.5},{n:'E4',d:0.5},{n:'C#5',d:0.5},{n:'D5',d:1},{n:'A4',d:0.5},{n:'D5',d:0.5},
+      // Build
+      {n:'F#5',d:0.5},{n:'E5',d:0.5},{n:'F#5',d:0.5},{n:'G5',d:0.5},{n:'A5',d:1},{n:'G5',d:0.5},{n:'F#5',d:0.5},
+      {n:'E5',d:0.5},{n:'D5',d:0.5},{n:'C#5',d:0.5},{n:'B4',d:0.5},{n:'A4',d:1},{n:'B4',d:0.5},{n:'C#5',d:0.5},
+      {n:'D5',d:2},
+      // Gentle ending
+      {n:'A5',d:0.5},{n:'G5',d:0.5},{n:'F#5',d:0.5},{n:'E5',d:0.5},
+      {n:'D5',d:0.5},{n:'C#5',d:0.5},{n:'B4',d:0.5},{n:'A4',d:0.5},
+      {n:'G4',d:0.5},{n:'F#4',d:0.5},{n:'E4',d:0.5},{n:'D4',d:0.5},
+      {n:'D5',d:2},
+    ]
+  },
+
+  elise: {
+    name: '致爱丽丝',
+    nameEn: 'Für Elise',
+    composer: 'Ludwig van Beethoven',
+    bpm: 80,
+    notes: [
+      // Famous opening motif
+      {n:'E5',d:0.5},{n:'D#5',d:0.5},{n:'E5',d:0.5},{n:'D#5',d:0.5},{n:'E5',d:0.5},
+      {n:'B4',d:0.5},{n:'D5',d:0.5},{n:'C5',d:0.5},{n:'A4',d:1},
+      // Response
+      {n:'C4',d:0.5},{n:'E4',d:0.5},{n:'A4',d:0.5},{n:'B4',d:1},
+      {n:'E4',d:0.5},{n:'G#4',d:0.5},{n:'B4',d:0.5},{n:'C5',d:1},
+      // Repeat motif
+      {n:'E4',d:0.5},{n:'E5',d:0.5},{n:'D#5',d:0.5},{n:'E5',d:0.5},{n:'D#5',d:0.5},{n:'E5',d:0.5},
+      {n:'B4',d:0.5},{n:'D5',d:0.5},{n:'C5',d:0.5},{n:'A4',d:1},
+      {n:'C4',d:0.5},{n:'E4',d:0.5},{n:'A4',d:0.5},{n:'B4',d:1},
+      // Resolution
+      {n:'E4',d:0.5},{n:'C5',d:0.5},{n:'B4',d:0.5},{n:'A4',d:1.5},
+      // Second section
+      {n:'B4',d:0.5},{n:'C5',d:0.5},{n:'D5',d:0.5},{n:'E5',d:1},
+      {n:'G4',d:0.5},{n:'F5',d:0.5},{n:'E5',d:0.5},{n:'D5',d:1},
+      {n:'F4',d:0.5},{n:'E5',d:0.5},{n:'D5',d:0.5},{n:'C5',d:1},
+      {n:'E4',d:0.5},{n:'D5',d:0.5},{n:'C5',d:0.5},{n:'B4',d:1},
+      // Return to motif
+      {n:'E5',d:0.5},{n:'D#5',d:0.5},{n:'E5',d:0.5},{n:'D#5',d:0.5},{n:'E5',d:0.5},
+      {n:'B4',d:0.5},{n:'D5',d:0.5},{n:'C5',d:0.5},{n:'A4',d:1},
+      {n:'C4',d:0.5},{n:'E4',d:0.5},{n:'A4',d:0.5},{n:'B4',d:1},
+      {n:'E4',d:0.5},{n:'C5',d:0.5},{n:'B4',d:0.5},{n:'A4',d:2},
+    ]
+  },
+
+  moonlight: {
+    name: '月光奏鸣曲',
+    nameEn: 'Moonlight Sonata',
+    composer: 'Ludwig van Beethoven',
+    bpm: 56,
+    // First movement – simplified triplet melody
+    notes: [
+      // Opening – haunting triplet arpeggios
+      {n:'G#3',d:0.33},{n:'C#4',d:0.33},{n:'E4',d:0.33},
+      {n:'G#3',d:0.33},{n:'C#4',d:0.33},{n:'E4',d:0.33},
+      {n:'G#3',d:0.33},{n:'C#4',d:0.33},{n:'E4',d:0.33},
+      {n:'G#3',d:0.33},{n:'C#4',d:0.33},{n:'E4',d:0.33},
+      // Melody enters on top
+      {n:'G#4',d:1.5},{n:'F#4',d:0.5},{n:'G#4',d:1},
+      {n:'A3',d:0.33},{n:'C#4',d:0.33},{n:'E4',d:0.33},
+      {n:'A3',d:0.33},{n:'C#4',d:0.33},{n:'E4',d:0.33},
+      {n:'A4',d:1.5},{n:'G#4',d:0.5},{n:'A4',d:0.5},{n:'G#4',d:0.5},
+      // Descent
+      {n:'G#3',d:0.33},{n:'B3',d:0.33},{n:'E4',d:0.33},
+      {n:'G#3',d:0.33},{n:'B3',d:0.33},{n:'E4',d:0.33},
+      {n:'G#4',d:1},{n:'F#4',d:0.5},{n:'E4',d:0.5},{n:'D#4',d:1},
+      // Second phrase
+      {n:'G#3',d:0.33},{n:'C#4',d:0.33},{n:'E4',d:0.33},
+      {n:'G#3',d:0.33},{n:'C#4',d:0.33},{n:'E4',d:0.33},
+      {n:'C#5',d:1},{n:'B4',d:0.5},{n:'A4',d:0.5},{n:'G#4',d:1},
+      {n:'A3',d:0.33},{n:'D4',d:0.33},{n:'F#4',d:0.33},
+      {n:'A3',d:0.33},{n:'D4',d:0.33},{n:'F#4',d:0.33},
+      {n:'A4',d:1},{n:'G#4',d:0.5},{n:'F#4',d:0.5},
+      // Quiet ending
+      {n:'E4',d:0.33},{n:'G#4',d:0.33},{n:'C#5',d:0.33},
+      {n:'E4',d:0.33},{n:'G#4',d:0.33},{n:'C#5',d:0.33},
+      {n:'G#4',d:2},
+      {n:'E4',d:0.33},{n:'G#4',d:0.33},{n:'C#5',d:0.33},
+      {n:'C#4',d:2},
+    ]
+  },
+
+  mariage: {
+    name: '梦中的婚礼',
+    nameEn: "Mariage d'Amour",
+    composer: 'Richard Clayderman / Paul de Senneville',
+    bpm: 68,
+    notes: [
+      // Intro
+      {n:'E4',d:0.5},{n:'F4',d:0.5},{n:'G4',d:0.5},{n:'A4',d:0.5},
+      {n:'B4',d:1},{n:'E5',d:1},{n:'D5',d:0.5},{n:'C5',d:0.5},
+      {n:'B4',d:1},{n:'A4',d:0.5},{n:'B4',d:0.5},{n:'C5',d:1},
+      {n:'B4',d:0.5},{n:'A4',d:0.5},{n:'G4',d:1},{n:'E4',d:1},
+      // Main melody
+      {n:'E5',d:1},{n:'D5',d:0.5},{n:'E5',d:0.5},{n:'F5',d:1},
+      {n:'E5',d:0.5},{n:'D5',d:0.5},{n:'C5',d:1},{n:'B4',d:0.5},{n:'A4',d:0.5},
+      {n:'B4',d:1},{n:'C5',d:0.5},{n:'D5',d:0.5},{n:'E5',d:1},
+      {n:'D5',d:0.5},{n:'C5',d:0.5},{n:'B4',d:1},{n:'A4',d:1},
+      // Emotional peak
+      {n:'A5',d:1},{n:'G5',d:0.5},{n:'F5',d:0.5},{n:'E5',d:1},
+      {n:'D5',d:0.5},{n:'C5',d:0.5},{n:'B4',d:1},{n:'A4',d:0.5},{n:'B4',d:0.5},
+      {n:'C5',d:1},{n:'D5',d:0.5},{n:'E5',d:0.5},{n:'F5',d:1},
+      {n:'E5',d:0.5},{n:'D5',d:0.5},{n:'C5',d:1},{n:'B4',d:1},
+      // Resolution
+      {n:'E5',d:0.5},{n:'D5',d:0.5},{n:'C5',d:0.5},{n:'B4',d:0.5},
+      {n:'A4',d:1},{n:'G4',d:0.5},{n:'A4',d:0.5},
+      {n:'B4',d:1},{n:'C5',d:0.5},{n:'B4',d:0.5},
+      {n:'A4',d:2},
+    ]
+  },
+
+  castle: {
+    name: '天空之城',
+    nameEn: 'Castle in the Sky',
+    composer: '久石讓 (Joe Hisaishi)',
+    bpm: 78,
+    notes: [
+      // Iconic opening
+      {n:'A4',d:0.5},{n:'B4',d:0.25},{n:'C5',d:0.75},{n:'B4',d:0.5},{n:'C5',d:0.5},{n:'E5',d:1},
+      {n:'B4',d:1.5},{n:'E4',d:0.5},
+      {n:'A4',d:0.5},{n:'B4',d:0.25},{n:'C5',d:0.75},{n:'B4',d:0.5},{n:'C5',d:0.5},{n:'A5',d:0.5},{n:'G5',d:0.5},
+      {n:'E5',d:2},
+      // Second phrase
+      {n:'A4',d:0.5},{n:'B4',d:0.25},{n:'C5',d:0.75},{n:'B4',d:0.5},{n:'C5',d:0.5},{n:'E5',d:0.5},{n:'D5',d:0.5},
+      {n:'C5',d:0.5},{n:'B4',d:0.5},{n:'A4',d:0.5},{n:'B4',d:0.5},{n:'G4',d:2},
+      // Chorus
+      {n:'E5',d:1},{n:'E5',d:0.5},{n:'F5',d:0.5},{n:'E5',d:0.5},{n:'C5',d:0.5},{n:'E5',d:1},
+      {n:'D5',d:1.5},{n:'D5',d:0.5},
+      {n:'D5',d:0.5},{n:'C5',d:0.5},{n:'B4',d:0.5},{n:'C5',d:0.5},{n:'D5',d:1.5},{n:'G4',d:0.5},
+      // Soaring
+      {n:'E5',d:1},{n:'E5',d:0.5},{n:'F5',d:0.5},{n:'E5',d:0.5},{n:'C5',d:0.5},{n:'E5',d:1},
+      {n:'A5',d:1.5},{n:'G5',d:0.5},
+      {n:'A5',d:0.5},{n:'G5',d:0.5},{n:'E5',d:0.5},{n:'D5',d:0.5},{n:'C5',d:1},{n:'B4',d:0.5},{n:'A4',d:0.5},
+      {n:'A4',d:2},
+    ]
+  },
+};
+
+// ═══════════════════════════════════════
+//  Song Selector UI
+// ═══════════════════════════════════════
+const songBar = document.getElementById('songBar');
+let currentSong = 'canon';
+
+Object.entries(SONGS).forEach(([key, song]) => {
+  const btn = document.createElement('button');
+  btn.className = 'song-btn' + (key === currentSong ? ' active' : '');
+  btn.textContent = song.name;
+  btn.dataset.key = key;
+  btn.addEventListener('click', () => selectSong(key));
+  songBar.appendChild(btn);
+});
+
+function selectSong(key) {
+  if (isPlaying) stopPlay();
+  currentSong = key;
+  document.querySelectorAll('.song-btn').forEach(b =>
+    b.classList.toggle('active', b.dataset.key === key)
+  );
+  const s = SONGS[key];
+  document.getElementById('songName').textContent = s.name;
+  document.getElementById('songComposer').textContent = s.composer;
+}
+selectSong('canon');
+
+// ═══════════════════════════════════════
+//  Playback Engine
+// ═══════════════════════════════════════
+let isPlaying = false;
+let playTimer = null;
+let noteIdx = 0;
+
+function togglePlay() {
+  if (isPlaying) stopPlay();
+  else startPlay();
+}
+
+function startPlay() {
+  ensureAudio();
+  isPlaying = true;
+  noteIdx = 0;
+  document.getElementById('playBtn').textContent = '⏸ 暂停';
+  document.getElementById('playBtn').classList.add('playing');
+  playNext();
+}
+
+function stopPlay() {
+  isPlaying = false;
+  clearTimeout(playTimer);
+  document.getElementById('playBtn').textContent = '▶ 演奏';
+  document.getElementById('playBtn').classList.remove('playing');
+  allNotes.forEach(n => releaseKey(n.note));
+}
+
+function playNext() {
+  if (!isPlaying) return;
+  const song = SONGS[currentSong];
+  if (noteIdx >= song.notes.length) {
+    noteIdx = 0; // loop
+  }
+  const m = song.notes[noteIdx];
+  const beatMs = 60000 / song.bpm;
+
+  if (m.n !== 'REST') {
+    const freq = noteFreqs[m.n];
+    if (freq) {
+      const vel = 0.5 + Math.random() * 0.3; // slight velocity variation
+      pressKey(m.n, freq, vel);
+      setTimeout(() => releaseKey(m.n), m.d * beatMs * 0.8);
+    }
+  }
+
+  noteIdx++;
+  playTimer = setTimeout(playNext, m.d * beatMs);
+}
+</script>
+</body>
+</html>
