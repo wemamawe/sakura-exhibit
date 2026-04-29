@@ -710,6 +710,7 @@ const SONGS = {
     nameEn: "Pachelbel's Canon in D",
     composer: 'Johann Pachelbel',
     bpm: 170,
+    speed: 1.7,
     particle: 'star',
     // Accurate Canon in D right hand melody
     notes: [
@@ -752,6 +753,7 @@ const SONGS = {
     nameEn: 'Für Elise',
     composer: 'Ludwig van Beethoven',
     bpm: 190, // 3/8 time, eighth note pulse
+    speed: 1.2,
     particle: 'butterfly',
     // WoO 59 accurate right hand
     notes: [
@@ -799,6 +801,7 @@ const SONGS = {
     nameEn: 'Moonlight Sonata',
     composer: 'Ludwig van Beethoven',
     bpm: 80, // Adagio sostenuto
+    speed: 1.2,
     particle: 'petal',
     // Op.27 No.2 Mvt.1 - triplet arpeggios with melody
     notes: [
@@ -862,6 +865,7 @@ const SONGS = {
     nameEn: "Mariage d'Amour",
     composer: 'Paul de Senneville',
     bpm: 112,
+    speed: 1.4,
     particle: 'rose',
     // Accurate right hand melody
     notes: [
@@ -905,6 +909,7 @@ const SONGS = {
     nameEn: 'Castle in the Sky',
     composer: '久石讓 Joe Hisaishi',
     bpm: 120,
+    speed: 1.3,
     particle: 'firefly',
     // 「君をのせて」accurate melody
     notes: [
@@ -1026,18 +1031,21 @@ function playNext() {
   }
   const m = song.notes[noteIdx];
   const beatMs = 60000 / song.bpm;
+  // Speed multiplier: makes all songs play at proper tempo
+  const speed = song.speed || 1;
+  const interval = (m.d * beatMs) / speed;
 
   if (m.n !== 'REST') {
     const freq = noteFreqs[m.n];
     if (freq) {
       const vel = 0.5 + Math.random() * 0.3;
       pressKey(m.n, freq, vel);
-      setTimeout(() => releaseKey(m.n), m.d * beatMs * 0.8);
+      setTimeout(() => releaseKey(m.n), Math.min(interval * 0.8, 400));
     }
   }
 
   noteIdx++;
-  playTimer = setTimeout(playNext, m.d * beatMs);
+  playTimer = setTimeout(playNext, interval);
 }
 </script>
 </body>
