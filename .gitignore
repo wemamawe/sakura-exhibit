@@ -1,3 +1,4 @@
 node_modules/
 *.png
+!butterflies/*.png
 sihua_covers/
